@@ -7,14 +7,15 @@ import { motion } from "framer-motion";
 import { SplitText } from "@/components/split-text";
 import { Logo } from "@/components/logo";
 import { ConnIcon } from "@/components/conn-icon";
-import { ArrowRight, Shield, Lock, Zap, ArrowLeft } from "lucide-react";
+import { ArrowRight, Shield, Lock, Zap, ArrowLeft, AlertCircle, ExternalLink, Copy, Check } from "lucide-react";
+import { useEffect, useState } from "react";
 
-const PROVIDERS = [
-  { id: "notion", label: "Notion", icon: "notion", desc: "Sign in with your Notion workspace", color: "#ffffff" },
-  { id: "google", label: "Google", icon: "drive", desc: "Drive + Gmail · One sign-in", color: "#4285F4" },
-  { id: "github", label: "GitHub", icon: "github", desc: "Repos, issues, gists", color: "#ffffff" },
-  { id: "slack", label: "Slack", icon: "slack", desc: "Channels + messages", color: "#E01E5A" },
-  { id: "linkedin", label: "LinkedIn", icon: "linkedin", desc: "Profile + connections", color: "#0A66C2" },
+const ALL_PROVIDERS = [
+  { id: "google", label: "Google", icon: "drive", desc: "Drive + Gmail · One sign-in", color: "#4285F4", env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
+  { id: "github", label: "GitHub", icon: "github", desc: "Repos, issues, gists", color: "#ffffff", env: ["GITHUB_ID", "GITHUB_SECRET"] },
+  { id: "slack", label: "Slack", icon: "slack", desc: "Channels + messages", color: "#E01E5A", env: ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"] },
+  { id: "linkedin", label: "LinkedIn", icon: "linkedin", desc: "Profile + connections", color: "#0A66C2", env: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"] },
+  { id: "notion", label: "Notion", icon: "notion", desc: "Sign in with your Notion workspace", color: "#ffffff", env: ["NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET", "NOTION_REDIRECT_URI"] },
 ];
 
 export function SignInClient() {
@@ -22,10 +23,25 @@ export function SignInClient() {
   const mode = params.get("mode") === "signup" ? "signup" : "signin";
   const callbackUrl = params.get("callbackUrl") || "/home";
   const { data: session } = useSession();
+  const [configured, setConfigured] = useState<string[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/auth/providers")
+      .then((r) => r.json())
+      .then((json) => {
+        setConfigured((json.providers || []).map((p: any) => p.id));
+        setLoadingProviders(false);
+      })
+      .catch(() => setLoadingProviders(false));
+  }, []);
 
   function handleSignIn(providerId: string) {
     signIn(providerId, { callbackUrl });
   }
+
+  const availableProviders = ALL_PROVIDERS.filter((p) => configured.includes(p.id));
+  const noProviders = !loadingProviders && availableProviders.length === 0;
 
   return (
     <div className="relative min-h-screen bg-black text-white vgrid overflow-hidden">
@@ -105,49 +121,63 @@ export function SignInClient() {
             </div>
           ) : (
             <>
-              <div className="pixel text-[12px] text-[var(--ember)] mb-2">{mode === "signup" ? "STEP 01 · PICK YOUR IDENTITY" : "SIGN IN WITH"}</div>
-              <h2 className="pixel text-[28px] mb-1">{mode === "signup" ? "Pick a provider" : "Welcome back"}</h2>
+              <div className="pixel text-[12px] text-[var(--ember)] mb-2">
+                {noProviders ? "SETUP REQUIRED" : mode === "signup" ? "STEP 01 · PICK YOUR IDENTITY" : "SIGN IN WITH"}
+              </div>
+              <h2 className="pixel text-[28px] mb-1">{noProviders ? "OAuth not configured" : mode === "signup" ? "Pick a provider" : "Welcome back"}</h2>
               <p className="pixel text-[13px] text-[var(--text-2)] mb-6">
-                {mode === "signup"
+                {noProviders
+                  ? "Add your OAuth credentials in Vercel Environment Variables to enable sign-in."
+                  : mode === "signup"
                   ? "Your OAuth identity is your workspace key. Pick one — you can connect the rest later."
                   : "Same provider you signed up with."}
               </p>
 
-              <div className="space-y-2">
-                {PROVIDERS.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => handleSignIn(p.id)}
-                    className="w-full p-4 rounded border border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] transition flex items-center gap-3 text-left group"
-                  >
-                    <div className="size-10 rounded bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
-                      <ConnIcon kind={p.icon} size={22} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[14px]">Continue with {p.label}</div>
-                      <div className="pixel text-[11px] text-[var(--muted)]">{p.desc}</div>
-                    </div>
-                    <ArrowRight size={14} className="text-[var(--muted)] group-hover:text-[var(--ember)] transition" />
-                  </button>
-                ))}
-              </div>
+              {noProviders && <SetupGuide />}
 
-              <div className="mt-6 pt-6 border-t border-[var(--line)] flex flex-col gap-2">
-                <Link
-                  href={mode === "signup" ? "/signin" : "/signin?mode=signup"}
-                  className="pixel text-[13px] text-[var(--text-2)] hover:text-[var(--ember)]"
-                >
-                  {mode === "signup" ? "Already have a workspace? Sign in →" : "No workspace yet? Create one →"}
-                </Link>
-                {mode !== "signup" && (
+              {!noProviders && (
+                <div className="space-y-2">
+                  {loadingProviders ? (
+                    <div className="text-[13px] text-[var(--muted)] py-4">Loading providers…</div>
+                  ) : (
+                    availableProviders.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => handleSignIn(p.id)}
+                        className="w-full p-4 rounded border border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] transition flex items-center gap-3 text-left group"
+                      >
+                        <div className="size-10 rounded bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
+                          <ConnIcon kind={p.icon} size={22} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[14px]">Continue with {p.label}</div>
+                          <div className="pixel text-[11px] text-[var(--muted)]">{p.desc}</div>
+                        </div>
+                        <ArrowRight size={14} className="text-[var(--muted)] group-hover:text-[var(--ember)] transition" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {!noProviders && (
+                <div className="mt-6 pt-6 border-t border-[var(--line)] flex flex-col gap-2">
                   <Link
-                    href="/forgot-password"
-                    className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
+                    href={mode === "signup" ? "/signin" : "/signin?mode=signup"}
+                    className="pixel text-[13px] text-[var(--text-2)] hover:text-[var(--ember)]"
                   >
-                    Can&apos;t sign in?
+                    {mode === "signup" ? "Already have a workspace? Sign in →" : "No workspace yet? Create one →"}
                   </Link>
-                )}
-              </div>
+                  {mode !== "signup" && (
+                    <Link
+                      href="/forgot-password"
+                      className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
+                    >
+                      Can&apos;t sign in?
+                    </Link>
+                  )}
+                </div>
+              )}
 
               <p className="pixel text-[10px] text-[var(--muted)] mt-6 leading-relaxed">
                 By continuing you agree your provider identity is hashed into a workspace key. Qyntra never reads your password.
@@ -156,6 +186,121 @@ export function SignInClient() {
           )}
         </motion.div>
       </div>
+    </div>
+  );
+}
+
+function SetupGuide() {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function copy(text: string, id: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
+
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+  const guides = [
+    {
+      name: "Google",
+      link: "https://console.cloud.google.com/apis/credentials",
+      steps: [
+        "Go to Google Cloud Console → APIs & Services → Credentials",
+        "Create OAuth 2.0 Client ID (Web application)",
+        `Add redirect URI: ${baseUrl}/api/auth/callback/google`,
+        "Copy Client ID and Client Secret to Vercel env vars",
+      ],
+      env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    },
+    {
+      name: "GitHub",
+      link: "https://github.com/settings/developers",
+      steps: [
+        "Go to GitHub Settings → Developer settings → OAuth Apps → New OAuth App",
+        `Set Authorization callback URL: ${baseUrl}/api/auth/callback/github`,
+        "Copy Client ID and Client Secret to Vercel env vars",
+      ],
+      env: ["GITHUB_ID", "GITHUB_SECRET"],
+    },
+    {
+      name: "Slack",
+      link: "https://api.slack.com/apps",
+      steps: [
+        "Go to api.slack.com/apps → Create New App → From scratch",
+        "Go to OAuth & Permissions → Add Redirect URL",
+        `Add redirect: ${baseUrl}/api/auth/callback/slack`,
+        "Copy Client ID and Client Secret to Vercel env vars",
+      ],
+      env: ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"],
+    },
+    {
+      name: "LinkedIn",
+      link: "https://www.linkedin.com/developers/apps",
+      steps: [
+        "Go to LinkedIn Developers → My Apps → Create App",
+        "Add OAuth 2.0 Authorized Redirect URL",
+        `Set redirect: ${baseUrl}/api/auth/callback/linkedin`,
+        "Copy Client ID and Client Secret to Vercel env vars",
+      ],
+      env: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
+    },
+    {
+      name: "Notion",
+      link: "https://www.notion.so/my-integrations",
+      steps: [
+        "Go to notion.so/my-integrations → New integration → Public integration",
+        `Add redirect URI: ${baseUrl}/api/auth/callback/notion`,
+        "Copy Client ID, Client Secret, and Redirect URI to Vercel env vars",
+      ],
+      env: ["NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET", "NOTION_REDIRECT_URI"],
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="p-3 rounded border border-[var(--gold)]/30 bg-[var(--gold)]/5 flex items-start gap-2">
+        <AlertCircle size={14} className="text-[var(--gold)] mt-0.5 flex-shrink-0" />
+        <div className="text-[12px] text-[var(--text-2)] leading-relaxed">
+          No OAuth providers are configured yet. Add the environment variables below in your{" "}
+          <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-[var(--ember)] hover:underline">
+            Vercel Dashboard → Project → Settings → Environment Variables
+          </a>
+          . The sign-in buttons will appear instantly after redeploy.
+        </div>
+      </div>
+
+      {guides.map((g) => (
+        <div key={g.name} className="p-3 rounded border border-[var(--line)] bg-[var(--bg-2)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <ConnIcon kind={g.name.toLowerCase()} size={16} />
+              <span className="text-[13px] font-medium">{g.name}</span>
+            </div>
+            <a href={g.link} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--ember)] hover:underline flex items-center gap-1">
+              <ExternalLink size={10} /> Open console
+            </a>
+          </div>
+          <ol className="list-decimal list-inside text-[11px] text-[var(--text-2)] space-y-1 mb-2">
+            {g.steps.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ol>
+          <div className="flex flex-wrap gap-1.5">
+            {g.env.map((e) => (
+              <button
+                key={e}
+                onClick={() => copy(e, e)}
+                className="mono text-[10px] px-2 py-1 rounded border border-[var(--line)] bg-[var(--bg-1)] hover:border-[var(--ember)]/40 flex items-center gap-1"
+              >
+                {copied === e ? <Check size={9} className="text-[var(--good)]" /> : <Copy size={9} />}
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
