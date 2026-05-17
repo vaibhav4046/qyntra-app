@@ -1,17 +1,53 @@
 import { NODES } from "@/lib/data";
 import { auth } from "@/lib/auth";
+import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 
-const SYSTEM_PROMPT = `You are Qyntra — a personal knowledge OS that has compiled the user's private wiki from their Drive, Notion, Gmail, Slack, LinkedIn, GitHub, arXiv and desktop files.
+interface UserFile {
+  kind: string;
+  title: string;
+  summary?: string;
+  source?: string;
+  source_url?: string;
+}
 
-You answer grounded on the user's own corpus. When you make a claim, cite it inline with [1], [2] etc and list sources at the end as numbered references.
+async function loadUserCorpus(userId: string): Promise<UserFile[]> {
+  if (!hasSupabase() || !userId) return [];
+  try {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb
+      .from("files")
+      .select("kind,title,summary,source,source_url")
+      .eq("user_id", userId)
+      .limit(60);
+    if (error) return [];
+    return (data || []) as UserFile[];
+  } catch {
+    return [];
+  }
+}
 
-Your tone: sharp, terse, no fluff. Use markdown sparingly. Predict what the user wants next and surface 2-3 follow-up questions at the end inside a section called "Predicted follow-ups:".
+function buildSystemPrompt(userFiles: UserFile[], demoMode: boolean): string {
+  const base = `You are Qyntra — a personal knowledge OS compiled from the user's own files.
 
-The user's wiki currently contains these pages and entities:
-${NODES.map((n) => `- [${n.kind}] ${n.label} — ${n.summary}`).join("\n")}
+Rules:
+- Answer grounded on the corpus below. If the answer is not in the corpus, say so directly. Never invent file titles.
+- Cite inline with [1], [2] and list numbered references at the end.
+- Sharp, terse, no fluff. Markdown sparingly.
+- End with a "Predicted follow-ups:" section with 2-3 specific next questions.`;
 
-The user's strongest predicted-next links right now: GraphRAG (92%), Cross-Encoder Reranking (81%), Hybrid retrieval claim (74%).
-`;
+  if (demoMode || userFiles.length === 0) {
+    const corpus = NODES.map((n, i) => `[${i + 1}] [${n.kind}] ${n.label} — ${n.summary}`).join("\n");
+    const banner = demoMode
+      ? "\n\nMODE: DEMO. The corpus below is sample data. State this in your first answer if asked about source provenance."
+      : "\n\nMODE: EMPTY. User has no synced files yet. Encourage them to connect a source at /sources, but still answer using the sample corpus for now.";
+    return `${base}\n\nCORPUS (${userFiles.length === 0 && !demoMode ? "sample fallback" : "demo"}):\n${corpus}${banner}`;
+  }
+
+  const corpus = userFiles
+    .map((f, i) => `[${i + 1}] [${f.kind}] ${f.title}${f.summary ? " — " + f.summary : ""}${f.source ? " (from " + f.source + ")" : ""}`)
+    .join("\n");
+  return `${base}\n\nMODE: LIVE — answers are grounded on the user's real synced files only.\n\nCORPUS (${userFiles.length} files):\n${corpus}`;
+}
 
 export async function POST(req: Request) {
   // Require authentication
@@ -30,7 +66,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { messages, provider = "nvidia" } = body;
+  const { messages, provider = "nvidia", demoMode = false } = body;
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return Response.json({ error: "Messages array required" }, { status: 400 });
   }
@@ -40,9 +76,14 @@ export async function POST(req: Request) {
     .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
     .slice(-20);
 
+  // Load user corpus from Supabase if not demo
+  const userId = (session.user as { id?: string }).id;
+  const userFiles = !demoMode && userId ? await loadUserCorpus(userId) : [];
+  const systemPrompt = buildSystemPrompt(userFiles, demoMode);
+
   const payload = {
     model: provider === "nvidia" ? "meta/llama-3.1-70b-instruct" : "llama-3.3-70b-versatile",
-    messages: [{ role: "system", content: SYSTEM_PROMPT }, ...sanitized],
+    messages: [{ role: "system", content: systemPrompt }, ...sanitized],
     temperature: 0.6,
     max_tokens: 1024,
     stream: true,

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Send, Sparkles, Loader2, Globe, Database, Files as FilesIcon } from "lucide-react";
+import { useProfileStore } from "@/lib/profile-store";
 
 interface Msg { role: "user" | "assistant"; content: string; }
 
@@ -21,6 +22,8 @@ export default function AskPage() {
   const [streaming, setStreaming] = useState(false);
   const [mode, setMode] = useState<"DEEP" | "WEB">("DEEP");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { demoMode, init } = useProfileStore();
+  useEffect(() => { init(); }, [init]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -39,7 +42,7 @@ export default function AskPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, demoMode }),
       });
 
       if (!res.ok || !res.body) {

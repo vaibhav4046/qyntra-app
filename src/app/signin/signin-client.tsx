@@ -132,13 +132,21 @@ export function SignInClient() {
                 ))}
               </div>
 
-              <div className="mt-6 pt-6 border-t border-[var(--line)]">
+              <div className="mt-6 pt-6 border-t border-[var(--line)] flex flex-col gap-2">
                 <Link
                   href={mode === "signup" ? "/signin" : "/signin?mode=signup"}
                   className="pixel text-[13px] text-[var(--text-2)] hover:text-[var(--ember)]"
                 >
                   {mode === "signup" ? "Already have a workspace? Sign in →" : "No workspace yet? Create one →"}
                 </Link>
+                {mode !== "signup" && (
+                  <Link
+                    href="/forgot-password"
+                    className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
+                  >
+                    Can&apos;t sign in?
+                  </Link>
+                )}
               </div>
 
               <p className="pixel text-[10px] text-[var(--muted)] mt-6 leading-relaxed">

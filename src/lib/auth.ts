@@ -4,12 +4,13 @@ import GitHub from "next-auth/providers/github";
 import Slack from "next-auth/providers/slack";
 import LinkedIn from "next-auth/providers/linkedin";
 import Notion from "next-auth/providers/notion";
+import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
     provider?: string;
-    user: DefaultSession["user"];
+    user: DefaultSession["user"] & { id?: string };
   }
 }
 
@@ -74,16 +75,44 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers,
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, account }) {
+    async signIn({ user, account, profile }) {
+      // Upsert profile row in Supabase on every sign-in
+      if (!hasSupabase() || !account || !user.email) return true;
+      try {
+        const id = `${account.provider}:${account.providerAccountId}`;
+        const sb = supabaseAdmin();
+        await sb.from("profiles").upsert(
+          {
+            id,
+            email: user.email,
+            name: user.name || profile?.name || null,
+            image: user.image || null,
+            provider: account.provider,
+          },
+          { onConflict: "id" }
+        );
+      } catch (err) {
+        console.error("[auth.signIn] supabase upsert failed", err);
+        // Don't block sign-in on DB hiccup
+      }
+      return true;
+    },
+    async jwt({ token, account, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.provider = account.provider;
+        token.uid = `${account.provider}:${account.providerAccountId}`;
+      }
+      if (user) {
+        token.email = user.email;
       }
       return token;
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
       session.provider = token.provider as string;
+      // Expose stable workspace id to the client
+      (session.user as { id?: string }).id = token.uid as string | undefined;
       return session;
     },
     async redirect({ url, baseUrl }) {
@@ -91,7 +120,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       // Allow same origin
       if (new URL(url).origin === baseUrl) return url;
-      return baseUrl + "/home";
+      // Default destination after sign-in: send first-timers through onboarding
+      return baseUrl + "/onboarding";
     },
   },
   pages: { signIn: "/signin" },

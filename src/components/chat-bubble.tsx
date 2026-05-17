@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, X, Send, Sparkles, Loader2 } from "lucide-react";
+import { useProfileStore } from "@/lib/profile-store";
 
 interface Msg {
   role: "user" | "assistant";
@@ -15,6 +16,7 @@ export function ChatBubble() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { demoMode } = useProfileStore();
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -33,7 +35,7 @@ export function ChatBubble() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, demoMode }),
       });
 
       if (!res.ok || !res.body) {
