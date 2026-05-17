@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { FILES_SEED } from "@/lib/data";
@@ -11,13 +11,9 @@ import {
   RefreshCw,
   X,
   ExternalLink,
-  UploadCloud,
-  FilePlus,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
 } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
+import { AutoIngest } from "@/components/auto-ingest";
 
 interface UFile {
   id: string;
@@ -50,12 +46,6 @@ export default function FilesPage() {
   const [realFiles, setRealFiles] = useState<UFile[]>([]);
   const [loading, setLoading] = useState(false);
   const { demoMode, init } = useProfileStore();
-
-  // Upload state
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     init();
@@ -97,49 +87,6 @@ export default function FilesPage() {
     return true;
   });
 
-  async function uploadFiles(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    setUploading(true);
-    setUploadMsg(null);
-    let ok = 0;
-    let fail = 0;
-    for (const file of Array.from(fileList)) {
-      try {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch("/api/files", { method: "POST", body: form });
-        if (res.ok) ok++;
-        else fail++;
-      } catch {
-        fail++;
-      }
-    }
-    setUploading(false);
-    if (fail === 0) {
-      setUploadMsg({ type: "ok", text: `${ok} file${ok > 1 ? "s" : ""} uploaded successfully.` });
-    } else {
-      setUploadMsg({ type: "err", text: `${ok} uploaded, ${fail} failed.` });
-    }
-    loadFiles();
-    setTimeout(() => setUploadMsg(null), 4000);
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragging(false);
-    uploadFiles(e.dataTransfer.files);
-  }
-
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragging(true);
-  }
-
-  function handleDragLeave(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragging(false);
-  }
-
   const desktopFiles = realFiles.filter((f) => f.source === "desktop" || f.source === "manual");
 
   return (
@@ -162,61 +109,10 @@ export default function FilesPage() {
         </button>
       </div>
 
-      {/* Upload zone */}
+      {/* Autonomous ingestion */}
       {!demoMode && (
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          className={`mb-6 p-6 rounded-xl border-2 border-dashed transition relative overflow-hidden ${
-            isDragging
-              ? "border-[var(--ember)] bg-[var(--ember)]/10"
-              : "border-[var(--line-2)] bg-[var(--bg-1)] hover:border-[var(--ember)]/40"
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".txt,.md,.pdf,.docx,.csv,.json"
-            className="hidden"
-            onChange={(e) => uploadFiles(e.target.files)}
-          />
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="size-12 rounded-full bg-[var(--bg-2)] border border-[var(--line)] flex items-center justify-center flex-shrink-0">
-              {uploading ? <Loader2 size={20} className="animate-spin text-[var(--ember)]" /> : <UploadCloud size={20} className="text-[var(--ember)]" />}
-            </div>
-            <div className="flex-1 text-center sm:text-left">
-              <div className="text-[14px] font-medium mb-1">
-                {uploading ? "Uploading files…" : "Drag & drop files here, or click to browse"}
-              </div>
-              <div className="mono cap text-[11px] text-[var(--muted)]">
-                Supports TXT, MD, PDF, DOCX, CSV, JSON. Parsed locally, uploaded as text only.
-              </div>
-            </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="mono cap text-[11px] px-4 py-2 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-2 disabled:opacity-50"
-            >
-              <FilePlus size={13} /> Select files
-            </button>
-          </div>
-
-          {uploadMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-4 p-2.5 rounded border flex items-center gap-2 text-[12px] ${
-                uploadMsg.type === "ok"
-                  ? "border-[var(--good)]/30 bg-[var(--good)]/10 text-[var(--good)]"
-                  : "border-[var(--bad)]/30 bg-[var(--bad)]/10 text-[var(--bad)]"
-              }`}
-            >
-              {uploadMsg.type === "ok" ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-              {uploadMsg.text}
-            </motion.div>
-          )}
+        <div className="mb-6">
+          <AutoIngest variant="page" onComplete={() => loadFiles()} />
         </div>
       )}
 
@@ -224,7 +120,7 @@ export default function FilesPage() {
         <div className="p-8 mb-6 rounded-xl border border-dashed border-[var(--ember)]/30 bg-[var(--ember)]/5 text-center">
           <div className="text-[18px] mb-2">Your workspace is empty.</div>
           <div className="mono cap text-[11px] text-[var(--text-2)] mb-4">
-            Connect a source to start indexing your files.
+            Use autonomous ingestion above, or connect a cloud source to start indexing.
           </div>
           <Link
             href="/sources"

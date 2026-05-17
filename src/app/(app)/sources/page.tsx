@@ -8,6 +8,7 @@ import { signIn, useSession } from "next-auth/react";
 import { useConnectorStore } from "@/lib/connector-store";
 import { ConnectGuide } from "@/components/connect-guide";
 import { RefreshCw, Check, AlertCircle } from "lucide-react";
+import { AutoIngestButton } from "@/components/auto-ingest";
 
 interface SyncState {
   loading: boolean;
@@ -104,6 +105,7 @@ export default function SourcesPage() {
                       </button>
                     </>
                   )}
+                  {c.provider === "local" && <AutoIngestButton onComplete={() => syncNow(c)} />}
                   <button
                     onClick={() => toggle(c)}
                     className={`relative w-12 h-6 rounded-full transition ${c.on ? "bg-[var(--ember)]" : "bg-[var(--bg-3)]"}`}

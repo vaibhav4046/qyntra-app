@@ -15,15 +15,10 @@ import {
   SkipForward,
   Sparkles,
   Shield,
-  Download,
-  Monitor,
   ExternalLink,
   Loader2,
-  UploadCloud,
-  FilePlus,
-  AlertCircle,
-  CheckCircle,
 } from "lucide-react";
+import { AutoIngest } from "@/components/auto-ingest";
 
 type StepId = "welcome" | "linkedin" | "slack" | "notion" | "desktop" | "review";
 
@@ -287,110 +282,41 @@ function ProviderStep({
 }
 
 function DesktopStep({ connected, onConnected }: { connected: boolean; onConnected: () => void }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function uploadFiles(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    setUploading(true);
-    setUploadMsg(null);
-    let ok = 0;
-    let fail = 0;
-    for (const file of Array.from(fileList)) {
-      try {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch("/api/files", { method: "POST", body: form });
-        if (res.ok) ok++;
-        else fail++;
-      } catch {
-        fail++;
-      }
-    }
-    setUploading(false);
-    if (fail === 0) {
-      setUploadMsg({ type: "ok", text: `${ok} file${ok > 1 ? "s" : ""} ingested.` });
-      onConnected();
-    } else {
-      setUploadMsg({ type: "err", text: `${ok} uploaded, ${fail} failed.` });
-      if (ok > 0) onConnected();
-    }
-    setTimeout(() => setUploadMsg(null), 5000);
-  }
-
   return (
     <>
       <p className="pixel text-[15px] text-[var(--text-2)] leading-[1.55] mb-6 max-w-[560px]">
-        Upload files directly from your desktop. They are parsed on the server and stored as text-only in your private workspace.
+        Grant one-time access to your Desktop or Documents folder. Qyntra scans, parses, and indexes every supported file automatically — no drag-and-drop required.
       </p>
 
-      <div className="space-y-3">
-        {/* Live upload card */}
-        <div className="p-5 rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)]">
-          <div className="flex items-start gap-4">
-            <div className="size-12 rounded bg-[var(--ember)]/15 border border-[var(--ember)]/30 flex items-center justify-center flex-shrink-0">
-              <Monitor size={20} className="text-[var(--ember)]" />
-            </div>
-            <div className="flex-1">
-              <div className="pixel text-[16px] mb-1">Desktop ingestion</div>
-              <p className="pixel text-[12.5px] text-[var(--text-2)] leading-relaxed mb-3">
-                Drag & drop or select files below. Supports TXT, MD, PDF, DOCX, CSV, JSON. Parsed server-side, text-only storage.
-              </p>
+      <AutoIngest
+        variant="onboarding"
+        onComplete={(count) => {
+          if (count > 0) onConnected();
+        }}
+      />
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".txt,.md,.pdf,.docx,.csv,.json"
-                className="hidden"
-                onChange={(e) => uploadFiles(e.target.files)}
-              />
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="pixel text-[11px] px-3 py-1.5 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {uploading ? <Loader2 size={11} className="animate-spin" /> : <UploadCloud size={11} />}
-                  {uploading ? "Ingesting…" : "Select files"}
-                </button>
-                {connected && (
-                  <span className="pixel text-[11px] text-[var(--good)] flex items-center gap-1">
-                    <Check size={11} /> Desktop connected
-                  </span>
-                )}
-              </div>
-
-              {uploadMsg && (
-                <div className={`mt-3 p-2 rounded border flex items-center gap-2 text-[12px] ${uploadMsg.type === "ok" ? "border-[var(--good)]/30 bg-[var(--good)]/10 text-[var(--good)]" : "border-[var(--bad)]/30 bg-[var(--bad)]/10 text-[var(--bad)]"}`}>
-                  {uploadMsg.type === "ok" ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                  {uploadMsg.text}
-                </div>
-              )}
-            </div>
-          </div>
+      {connected && (
+        <div className="mt-4 p-3 rounded border border-[var(--good)]/30 bg-[var(--good)]/10 flex items-center gap-2 text-[12px] text-[var(--good)]">
+          <Check size={14} /> Desktop ingestion connected
         </div>
+      )}
 
-        {/* Alternative link to files page */}
-        <div className="p-5 rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)]">
-          <div className="flex items-start gap-4">
-            <div className="size-12 rounded bg-[var(--gold)]/15 border border-[var(--gold)]/30 flex items-center justify-center flex-shrink-0">
-              <FilePlus size={20} className="text-[var(--gold)]" />
-            </div>
-            <div className="flex-1">
-              <div className="pixel text-[16px] mb-1">Manage all files</div>
-              <p className="pixel text-[12.5px] text-[var(--text-2)] leading-relaxed mb-3">
-                Want to upload more later, browse existing files, or delete items? Head to the Files page anytime.
-              </p>
-              <Link
-                href="/files"
-                className="pixel text-[11px] px-3 py-1.5 rounded border border-[var(--ember)]/40 text-[var(--ember)] hover:bg-[var(--ember)]/10 inline-flex items-center gap-1.5"
-              >
-                Open Files →
-              </Link>
-            </div>
+      <div className="mt-4 p-5 rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)]">
+        <div className="flex items-start gap-4">
+          <div className="size-12 rounded bg-[var(--gold)]/15 border border-[var(--gold)]/30 flex items-center justify-center flex-shrink-0">
+            <ExternalLink size={20} className="text-[var(--gold)]" />
+          </div>
+          <div className="flex-1">
+            <div className="pixel text-[16px] mb-1">Manage all files</div>
+            <p className="pixel text-[12.5px] text-[var(--text-2)] leading-relaxed mb-3">
+              Browse, search, or ingest more folders anytime from the Files page.
+            </p>
+            <Link
+              href="/files"
+              className="pixel text-[11px] px-3 py-1.5 rounded border border-[var(--ember)]/40 text-[var(--ember)] hover:bg-[var(--ember)]/10 inline-flex items-center gap-1.5"
+            >
+              Open Files →
+            </Link>
           </div>
         </div>
       </div>
