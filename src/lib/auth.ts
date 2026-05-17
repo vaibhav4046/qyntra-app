@@ -1,7 +1,6 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
-import Slack from "next-auth/providers/slack";
 import LinkedIn from "next-auth/providers/linkedin";
 import Notion from "next-auth/providers/notion";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
@@ -9,12 +8,20 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
+    refreshToken?: string;
     provider?: string;
+    expiresAt?: number; // unix timestamp (seconds)
     user: DefaultSession["user"] & { id?: string };
   }
 }
 
 const providers = [];
+
+/* ─── AUTH-ONLY PROVIDERS ───
+ * Slack is intentionally excluded from sign-in.
+ * It is available for ingestion via /sources with its own OAuth flow.
+ * Slack user tokens expire in ~12 hours, making them unsuitable for session auth.
+ */
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
@@ -38,15 +45,6 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
     GitHub({
       clientId: process.env.GITHUB_ID,
       clientSecret: process.env.GITHUB_SECRET,
-    })
-  );
-}
-
-if (process.env.SLACK_CLIENT_ID && process.env.SLACK_CLIENT_SECRET) {
-  providers.push(
-    Slack({
-      clientId: process.env.SLACK_CLIENT_ID,
-      clientSecret: process.env.SLACK_CLIENT_SECRET,
     })
   );
 }
@@ -93,15 +91,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
       } catch (err) {
         console.error("[auth.signIn] supabase upsert failed", err);
-        // Don't block sign-in on DB hiccup
       }
       return true;
     },
     async jwt({ token, account, user }) {
       if (account) {
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
         token.provider = account.provider;
         token.uid = `${account.provider}:${account.providerAccountId}`;
+        // expires_at comes as seconds from some providers; normalize
+        token.expiresAt = account.expires_at ?? undefined;
       }
       if (user) {
         token.email = user.email;
@@ -110,17 +110,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
+      session.refreshToken = token.refreshToken as string;
       session.provider = token.provider as string;
-      // Expose stable workspace id to the client
+      session.expiresAt = token.expiresAt as number | undefined;
       (session.user as { id?: string }).id = token.uid as string | undefined;
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // Allow relative callbacks
       if (url.startsWith("/")) return `${baseUrl}${url}`;
-      // Allow same origin
       if (new URL(url).origin === baseUrl) return url;
-      // Default destination after sign-in: send first-timers through onboarding
       return baseUrl + "/onboarding";
     },
   },

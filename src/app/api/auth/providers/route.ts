@@ -1,11 +1,7 @@
-import { auth } from "@/lib/auth";
-
 export async function GET() {
-  // Auth.js internal: providers array from auth config
-  // We return only the ids + names so the UI can show real configured providers
-  const { providers } = await auth().then(() => ({} as any)).catch(() => ({} as any));
-  // Actually, auth() returns session. We need to access the config directly.
-  // Since we can't easily introspect the auth config here, we'll hard-sync with auth.ts
+  /* Auth-providers endpoint: returns only the providers suitable for sign-in.
+   * Slack is excluded because its user token expires in ~12 hours and is
+   * therefore only available for ingestion via /sources (not login). */
   const configured: { id: string; name: string }[] = [];
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -13,9 +9,6 @@ export async function GET() {
   }
   if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
     configured.push({ id: "github", name: "GitHub" });
-  }
-  if (process.env.SLACK_CLIENT_ID && process.env.SLACK_CLIENT_SECRET) {
-    configured.push({ id: "slack", name: "Slack" });
   }
   if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
     configured.push({ id: "linkedin", name: "LinkedIn" });

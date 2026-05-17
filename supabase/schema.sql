@@ -124,3 +124,29 @@ drop trigger if exists profiles_updated_at on public.profiles;
 create trigger profiles_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
+
+-- =====================================================
+-- OAUTH_STATES (temporary CSRF / state storage for custom OAuth flows)
+-- =====================================================
+create table if not exists public.oauth_states (
+  state text primary key,
+  provider text not null,
+  user_id text references public.profiles(id) on delete cascade,
+  created_at timestamptz default now()
+);
+
+create index if not exists oauth_states_user_id_idx on public.oauth_states(user_id);
+create index if not exists oauth_states_created_at_idx on public.oauth_states(created_at);
+
+-- Auto-cleanup old states after 10 minutes
+create or replace function public.delete_old_oauth_states()
+returns trigger language plpgsql as $$
+begin
+  delete from public.oauth_states where created_at < now() - interval '10 minutes';
+  return new;
+end $$;
+
+drop trigger if exists oauth_states_cleanup on public.oauth_states;
+create trigger oauth_states_cleanup
+  after insert on public.oauth_states
+  execute function public.delete_old_oauth_states();

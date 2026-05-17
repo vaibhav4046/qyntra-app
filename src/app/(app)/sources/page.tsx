@@ -24,12 +24,38 @@ export default function SourcesPage() {
 
   useEffect(() => { init(); }, [init]);
 
+  // Listen for Slack popup postMessage
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type === "SLACK_CONNECTED" && e.data.ok) {
+        setSyncs((s) => ({ ...s, slack: { loading: false, message: "Slack connected" } }));
+        // Optimistically flip connector on
+        toggle({ ...conns.find((x) => x.id === "slack")! } as QConnector);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [init, conns, toggle]);
+
   async function connectReal(c: QConnector) {
     if (c.provider === "google") signIn("google", { callbackUrl: "/sources" });
     else if (c.provider === "notion") signIn("notion", { callbackUrl: "/sources" });
-    else if (c.provider === "slack") signIn("slack", { callbackUrl: "/sources" });
     else if (c.provider === "github") signIn("github", { callbackUrl: "/sources" });
     else if (c.provider === "linkedin") signIn("linkedin", { callbackUrl: "/sources" });
+    else if (c.provider === "slack") {
+      // Slack is ingestion-only (not sign-in) because user tokens expire in ~12 hours.
+      // Use custom OAuth flow via popup.
+      const popup = window.open("", "slack-oauth", "width=500,height=700");
+      if (!popup) return;
+      const res = await fetch("/api/connectors/slack/start");
+      const json = await res.json();
+      if (json.url) {
+        popup.location.href = json.url;
+      } else {
+        popup.close();
+        setSyncs((s) => ({ ...s, slack: { loading: false, error: json.error || "Slack OAuth not configured" } }));
+      }
+    }
   }
 
   async function syncNow(c: QConnector) {
