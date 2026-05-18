@@ -226,9 +226,9 @@ export default function AskPage() {
   }
 
   return (
-    <div className="h-full grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] overflow-hidden">
+    <div className="h-full min-h-0 grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] overflow-hidden">
       {/* Conversation history rail */}
-      <aside className="hidden lg:flex flex-col border-r border-[var(--line)] bg-[var(--bg)] overflow-hidden">
+      <aside className="hidden lg:flex flex-col min-h-0 border-r border-[var(--line)] bg-[var(--bg)] overflow-hidden">
         <div className="p-3 border-b border-[var(--line)]">
           <button
             onClick={() => newChat()}
@@ -289,8 +289,8 @@ export default function AskPage() {
       </aside>
 
       {/* Main chat */}
-      <div className="flex flex-col min-w-0 relative">
-        <div className="px-6 sm:px-10 py-5 border-b border-[var(--line)] flex items-center justify-between gap-3">
+      <div className="flex flex-col min-w-0 min-h-0 h-full relative">
+        <div className="flex-shrink-0 px-6 sm:px-10 py-5 border-b border-[var(--line)] flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="mono cap text-[11px] text-[var(--ember)] mb-1 flex items-center gap-2">
               Surface 02 · Ask your wiki
@@ -332,10 +332,10 @@ export default function AskPage() {
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto px-6 sm:px-10 py-8 space-y-6"
+          className="chat-scroll flex-1 min-h-0 overflow-y-auto px-6 sm:px-10 py-8 space-y-6"
           style={{
             scrollbarWidth: "thin",
-            scrollbarColor: "rgba(255,91,31,0.5) transparent",
+            scrollbarColor: "rgba(255,91,31,0.6) rgba(255,255,255,0.04)",
             overscrollBehavior: "contain",
           }}
         >
@@ -399,7 +399,7 @@ export default function AskPage() {
           </button>
         )}
 
-        <div className="border-t border-[var(--line)] px-6 sm:px-10 py-4 sm:py-5 bg-[var(--bg)]/60 backdrop-blur-md">
+        <div className="flex-shrink-0 border-t border-[var(--line)] px-6 sm:px-10 py-4 sm:py-5 bg-[var(--bg)]/60 backdrop-blur-md">
           <div className="max-w-[860px] mx-auto">
             {chatError && (
               <div className="mb-2 px-3 py-2 rounded border border-[var(--bad)]/30 bg-[var(--bad)]/5 flex items-center gap-2 text-[11px] text-[var(--bad)]">

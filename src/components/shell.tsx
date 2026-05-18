@@ -176,7 +176,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           )}
         </AnimatePresence>
 
-        <main className="overflow-y-auto bg-[var(--bg)] h-full min-w-0">
+        <main className="overflow-y-auto bg-[var(--bg)] h-full min-h-0 min-w-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
