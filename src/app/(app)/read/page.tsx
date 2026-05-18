@@ -82,7 +82,7 @@ export default function ReadPage() {
     setFileContent(null);
     setContentLoading(true);
     try {
-      const res = await fetch(`/api/files?id=${file.id}`);
+      const res = await fetch(`/api/files/${file.id}`);
       if (!res.ok) {
         setFileContent("[Error loading content]");
         return;
