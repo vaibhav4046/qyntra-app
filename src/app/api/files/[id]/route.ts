@@ -1,7 +1,10 @@
 import { auth } from "@/lib/auth";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 
-export async function GET(req: Request) {
+export async function GET(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
   const session = await auth();
   if (!session?.user?.id) {
     return Response.json({ error: "Unauthenticated" }, { status: 401 });
@@ -10,8 +13,7 @@ export async function GET(req: Request) {
     return Response.json({ error: "Supabase not configured" }, { status: 503 });
   }
 
-  const url = new URL(req.url);
-  const id = url.searchParams.get("id");
+  const { id } = await ctx.params;
   if (!id) {
     return Response.json({ error: "Missing id parameter" }, { status: 400 });
   }
