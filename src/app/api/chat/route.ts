@@ -143,7 +143,10 @@ export async function POST(req: Request) {
     stream: true,
   };
 
-  const apiKey = provider === "nvidia" ? process.env.NVIDIA_API_KEY : process.env.GROQ_API_KEY;
+  // Allow user-supplied API key via header (overrides server env). Useful for
+  // judges / power users who want to use their own Groq quota.
+  const userKey = req.headers.get("x-qyntra-api-key") || "";
+  const apiKey = userKey || (provider === "nvidia" ? process.env.NVIDIA_API_KEY : process.env.GROQ_API_KEY);
   const endpoint = provider === "nvidia"
     ? "https://integrate.api.nvidia.com/v1/chat/completions"
     : "https://api.groq.com/openai/v1/chat/completions";

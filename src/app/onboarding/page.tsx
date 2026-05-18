@@ -56,8 +56,32 @@ export default function OnboardingPage() {
   const [alreadyOnboarded, setAlreadyOnboarded] = useState(false);
 
   useEffect(() => {
-    setAlreadyOnboarded(localStorage.getItem(LS_ONBOARDED) === "1");
-  }, []);
+    let cancelled = false;
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const wantReset = params?.has("reset") ?? false;
+    const onboardedLS = localStorage.getItem(LS_ONBOARDED) === "1";
+    setAlreadyOnboarded(onboardedLS);
+    // Auto-skip if local flag says onboarded — go straight to dashboard.
+    if (onboardedLS && !wantReset) {
+      router.replace("/home");
+      return;
+    }
+    // Otherwise check server profile (handles fresh devices for returning users).
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled) return;
+        if (j?.onboarded && !wantReset) {
+          localStorage.setItem(LS_ONBOARDED, "1");
+          setAlreadyOnboarded(true);
+          router.replace("/home");
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin?callbackUrl=/onboarding");

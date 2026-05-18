@@ -17,7 +17,7 @@ const ROUTES = [
   { href: "/home", label: "Dashboard", icon: Home, k: "1" },
   { href: "/wiki", label: "Wiki", icon: BookOpen, k: "2" },
   { href: "/map-3d", label: "3D Galaxy", icon: Boxes, k: "3", badge: "BETA" },
-  { href: "/ask", label: "Ask", icon: MessageSquare, k: "4" },
+  { href: "/ask", label: "Chat", icon: MessageSquare, k: "4" },
   { href: "/read", label: "Read", icon: BookOpen, k: "5" },
   { href: "/files", label: "Files", icon: FileText, k: "6" },
   { href: "/sources", label: "Sources", icon: Plug, k: "7" },

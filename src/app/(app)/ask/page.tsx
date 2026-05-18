@@ -180,16 +180,47 @@ export default function AskPage() {
     pushMessage({ role: "assistant", content: "" });
     setStreaming(true);
 
+    let augmentedUserText = userText;
+    // WEB mode: fetch live web context first, prepend to the question
+    if (mode === "WEB") {
+      try {
+        updateAssistant("🌐 Searching the web…");
+        const wsRes = await fetch("/api/web-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: userText }),
+        });
+        if (wsRes.ok) {
+          const wsJson = await wsRes.json();
+          const results: { title: string; url: string; snippet: string }[] = wsJson.results || [];
+          const webContext = results
+            .slice(0, 6)
+            .map((r, i) => `[W${i + 1}] ${r.title} — ${r.snippet}\n${r.url}`)
+            .join("\n\n");
+          augmentedUserText = `${userText}\n\n--- LIVE WEB RESULTS (cite as [W1], [W2]) ---\n${webContext}`;
+          updateAssistant("");
+        }
+      } catch {}
+    } else if (mode === "DEEP") {
+      // DEEP: ask LLM to outline a research plan first (in same request — we hint via system).
+      augmentedUserText = `Run a DEEP research pass on the following. (1) Outline 3 sub-questions you need to answer. (2) Answer each sub-question grounded on the corpus with citations. (3) Synthesise.\n\nQuestion: ${userText}`;
+    }
+
+    const customApiKey = typeof window !== "undefined" ? localStorage.getItem("qyntra:custom-api-key") || "" : "";
+
     const history = [
       ...(active?.messages || []),
-      { role: "user" as const, content: userText },
+      { role: "user" as const, content: augmentedUserText },
     ];
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, demoMode }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(customApiKey ? { "X-Qyntra-Api-Key": customApiKey } : {}),
+        },
+        body: JSON.stringify({ messages: history, demoMode, mode }),
       });
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "Request failed" }));
@@ -292,10 +323,18 @@ export default function AskPage() {
       <div className="flex flex-col min-w-0 min-h-0 h-full relative">
         <div className="flex-shrink-0 px-6 sm:px-10 py-5 border-b border-[var(--line)] flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="mono cap text-[11px] text-[var(--ember)] mb-1 flex items-center gap-2">
+            <div className="mono cap text-[11px] text-[var(--ember)] mb-1 flex items-center gap-2 flex-wrap">
               Surface 02 · Ask your wiki
               {corpusInfo && corpusInfo.files > 0 && (
                 <span className="text-[var(--gold)]">· {corpusInfo.files} sources</span>
+              )}
+              <span className="mono text-[10px] px-2 py-0.5 rounded bg-[var(--bg-2)] border border-[var(--line)] text-[var(--text-2)]">
+                MODEL · GROQ LLAMA 3.3 70B
+              </span>
+              {tokenInfo && (
+                <span className="mono text-[10px] px-2 py-0.5 rounded bg-[var(--ember)]/10 border border-[var(--ember)]/30 text-[var(--ember)]">
+                  {tokenInfo.input + tokenInfo.output}t · {tokenInfo.input} in / {tokenInfo.output} out
+                </span>
               )}
             </div>
             <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight truncate">
@@ -463,6 +502,7 @@ export default function AskPage() {
 
       <aside className="hidden lg:flex flex-col border-l border-[var(--line)] bg-[var(--bg-1)] overflow-y-auto">
         <div className="p-6">
+          <ModelSettings />
           {corpusInfo && corpusInfo.files > 0 ? (
             <>
               <div className="mono cap text-[11px] text-[var(--ember)] mb-4 flex items-center gap-2">
@@ -556,6 +596,69 @@ export default function AskPage() {
           </div>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function ModelSettings() {
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setKey(localStorage.getItem("qyntra:custom-api-key") || "");
+    }
+  }, []);
+
+  function save() {
+    if (typeof window === "undefined") return;
+    if (key.trim()) {
+      localStorage.setItem("qyntra:custom-api-key", key.trim());
+    } else {
+      localStorage.removeItem("qyntra:custom-api-key");
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }
+
+  return (
+    <div className="mb-5 rounded-lg border border-[var(--line)] bg-[var(--bg-2)] overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-[var(--bg)]/40 transition"
+      >
+        <div className="flex items-center gap-2">
+          <span className="mono text-[10px] text-[var(--ember)]">MODEL</span>
+          <span className="text-[12px]">Groq · Llama 3.3 70B</span>
+        </div>
+        <span className="mono text-[10px] text-[var(--muted)]">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 py-3 border-t border-[var(--line)] space-y-2">
+          <div className="mono text-[10px] text-[var(--text-2)]">
+            Use your own Groq API key (optional)
+          </div>
+          <input
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="gsk_…"
+            className="w-full px-2.5 py-1.5 text-[11px] mono rounded bg-[var(--bg)] border border-[var(--line)] focus:border-[var(--ember)]/40 outline-none"
+          />
+          <button
+            onClick={save}
+            className="w-full mono cap text-[10px] px-2.5 py-1.5 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] transition"
+          >
+            {saved ? "✓ SAVED" : "SAVE KEY"}
+          </button>
+          <div className="mono text-[9px] text-[var(--muted)] leading-snug">
+            Saved in your browser only. Sent as X-Qyntra-Api-Key header. Leave blank to use the server default.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
