@@ -120,7 +120,8 @@ export async function POST(req: Request) {
 
   const conversationText = sanitized.map((m: { content: string }) => m.content).join(" ");
   const conversationTokens = estimateTokens(conversationText);
-  const systemTokens = corpusTokens + estimateTokens(systemPrompt);
+  // corpusTokens already counts the full system prompt (corpus is embedded inside it)
+  const systemTokens = corpusTokens;
   const totalInputTokens = systemTokens + conversationTokens;
 
   // Cap max_tokens dynamically based on context size.
