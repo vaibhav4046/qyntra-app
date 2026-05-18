@@ -44,7 +44,42 @@ export function SignInClient() {
   }, []);
 
   function handleSignIn(providerId: string) {
-    signIn(providerId, { callbackUrl });
+    // Auth.js v5 beta.31 client has a bug where signIn() redirects to
+    // /api/auth/signin/{provider} via GET, but the server only accepts POST.
+    // We manually POST a form to /api/auth/signin instead.
+    fetch("/api/auth/csrf", { credentials: "include" })
+      .then((r) => r.json())
+      .then(({ csrfToken }) => {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/api/auth/signin";
+        form.style.display = "none";
+
+        const providerInput = document.createElement("input");
+        providerInput.type = "hidden";
+        providerInput.name = "provider";
+        providerInput.value = providerId;
+        form.appendChild(providerInput);
+
+        const callbackInput = document.createElement("input");
+        callbackInput.type = "hidden";
+        callbackInput.name = "callbackUrl";
+        callbackInput.value = callbackUrl;
+        form.appendChild(callbackInput);
+
+        const csrfInput = document.createElement("input");
+        csrfInput.type = "hidden";
+        csrfInput.name = "csrfToken";
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+
+        document.body.appendChild(form);
+        form.submit();
+      })
+      .catch(() => {
+        // Fallback: try the broken signIn() anyway
+        signIn(providerId, { callbackUrl });
+      });
   }
 
   // Show all providers — disable click on unconfigured ones (clearer than hiding)
