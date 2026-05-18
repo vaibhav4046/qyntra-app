@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield,
@@ -15,6 +15,8 @@ import {
   X,
   ArrowRight,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 declare global {
@@ -26,7 +28,9 @@ declare global {
 interface FileSystemDirectoryHandle {
   kind: "directory";
   name: string;
-  values(): AsyncIterableIterator<FileSystemHandle>;
+  values?(): AsyncIterableIterator<FileSystemHandle>;
+  entries?(): AsyncIterableIterator<[string, FileSystemHandle]>;
+  [Symbol.asyncIterator]?(): AsyncIterableIterator<[string, FileSystemHandle]>;
 }
 
 interface FileSystemFileHandle {
@@ -42,11 +46,25 @@ interface AutoIngestProps {
   variant?: "onboarding" | "page";
 }
 
-const SUPPORTED_EXTS = [".txt", ".md", ".pdf", ".docx", ".csv", ".json", ".xml", ".html", ".css", ".js", ".ts", ".py", ".sql"];
+const SUPPORTED_EXTS = [
+  ".txt", ".md", ".pdf", ".docx", ".doc", ".csv", ".json", ".xml",
+  ".html", ".css", ".js", ".ts", ".jsx", ".tsx", ".py", ".sql",
+  ".log", ".yaml", ".yml", ".ini", ".cfg", ".sh", ".rb", ".go",
+  ".java", ".cpp", ".c", ".h", ".php", ".swift", ".rs", ".scala",
+  ".kt", ".r", ".pl", ".lua", ".matlab", ".m", ".ps1", ".bat",
+  ".cmd", ".asm", ".s", ".tex", ".bib", ".dockerfile", ".makefile",
+  ".graphql", ".proto", ".thrift", ".toml",
+];
 
 function isSupported(name: string): boolean {
   const n = name.toLowerCase();
   return SUPPORTED_EXTS.some((ext) => n.endsWith(ext));
+}
+
+interface ScanResult {
+  files: File[];
+  skipped: string[];
+  totalSeen: number;
 }
 
 export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
@@ -58,9 +76,14 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
   const [failed, setFailed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [dirName, setDirName] = useState("");
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
+  const [totalSeen, setTotalSeen] = useState(0);
+  const [showSkipped, setShowSkipped] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const abortRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isSupportedBrowser = typeof window !== "undefined" && !!window.showDirectoryPicker;
+  const canUseNativePicker = typeof window !== "undefined" && !!window.showDirectoryPicker;
 
   const reset = useCallback(() => {
     setStep("idle");
@@ -69,36 +92,74 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
     setFailed(0);
     setError(null);
     setDirName("");
+    setSkippedFiles([]);
+    setTotalSeen(0);
+    setShowSkipped(false);
+    setUploadErrors([]);
     abortRef.current = false;
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  async function scanDirectory(dirHandle: FileSystemDirectoryHandle): Promise<File[]> {
+  async function scanDirectory(dirHandle: FileSystemDirectoryHandle): Promise<ScanResult> {
     const files: File[] = [];
+    const skipped: string[] = [];
+    let totalSeen = 0;
     const queue: FileSystemDirectoryHandle[] = [dirHandle];
 
     while (queue.length > 0 && !abortRef.current) {
       const current = queue.shift()!;
-      for await (const entry of current.values()) {
-        if (abortRef.current) break;
-        if (entry.kind === "directory") {
-          queue.push(entry as FileSystemDirectoryHandle);
-        } else if (entry.kind === "file" && isSupported(entry.name)) {
-          try {
-            const file = await (entry as FileSystemFileHandle).getFile();
-            files.push(file);
-          } catch {
-            // skip locked / unreadable files
+      try {
+        // Try different iterator methods for compatibility
+        let iterable: AsyncIterable<FileSystemHandle | [string, FileSystemHandle]> | undefined;
+        if (current.values) {
+          iterable = current.values() as AsyncIterable<FileSystemHandle>;
+        } else if (current.entries) {
+          iterable = current.entries() as AsyncIterable<[string, FileSystemHandle]>;
+        } else if (Symbol.asyncIterator in current) {
+          const iter = (current as any)[Symbol.asyncIterator];
+          if (iter) iterable = iter() as AsyncIterable<[string, FileSystemHandle]>;
+        }
+
+        if (!iterable) continue;
+
+        for await (const item of iterable) {
+          if (abortRef.current) break;
+          // Handle both values() and entries() / default iterator
+          const entry: FileSystemHandle = Array.isArray(item) ? item[1] : item;
+          
+          if (entry.kind === "directory") {
+            queue.push(entry as FileSystemDirectoryHandle);
+          } else if (entry.kind === "file") {
+            totalSeen++;
+            if (isSupported(entry.name)) {
+              try {
+                const file = await (entry as FileSystemFileHandle).getFile();
+                // Only include non-empty files
+                if (file.size > 0) {
+                  files.push(file);
+                } else {
+                  skipped.push(`${entry.name} (empty)`);
+                }
+              } catch (e) {
+                skipped.push(`${entry.name} (unreadable)`);
+              }
+            } else {
+              skipped.push(`${entry.name} (unsupported type)`);
+            }
           }
         }
+      } catch (e) {
+        console.warn("[scanDirectory] error reading directory:", current.name, e);
       }
     }
-    return files;
+    return { files, skipped, totalSeen };
   }
 
   async function uploadBatch(files: File[], onProgress: (ok: number, fail: number) => void) {
-    const concurrency = 5;
+    const concurrency = 3;
     let ok = 0;
     let fail = 0;
+    const errors: string[] = [];
 
     for (let i = 0; i < files.length; i += concurrency) {
       if (abortRef.current) break;
@@ -112,22 +173,27 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
               method: "POST",
               body: form,
             });
-            return res.ok;
-          } catch {
-            return false;
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ error: "Upload failed" }));
+              return { ok: false, error: `${file.name}: ${err.error || res.statusText}` };
+            }
+            return { ok: true, error: "" };
+          } catch (e) {
+            return { ok: false, error: `${file.name}: ${(e as Error).message}` };
           }
         })
       );
-      ok += results.filter(Boolean).length;
-      fail += results.filter((r) => !r).length;
+      ok += results.filter((r) => r.ok).length;
+      fail += results.filter((r) => !r.ok).length;
+      errors.push(...results.filter((r) => !r.ok).map((r) => r.error));
       onProgress(ok, fail);
     }
-    return { ok, fail };
+    return { ok, fail, errors };
   }
 
   async function startIngestion() {
     if (!window.showDirectoryPicker) {
-      setError("Your browser doesn't support directory access. Try Chrome or Edge.");
+      setError("Your browser doesn't support directory access. Try Chrome or Edge, or use the fallback file picker below.");
       setStep("error");
       return;
     }
@@ -138,8 +204,10 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
       setDirName(dirHandle.name);
       setStep("scanning");
 
-      const files = await scanDirectory(dirHandle);
+      const { files, skipped, totalSeen } = await scanDirectory(dirHandle);
       setFilesFound(files.length);
+      setSkippedFiles(skipped.slice(0, 50));
+      setTotalSeen(totalSeen);
 
       if (files.length === 0) {
         setStep("done");
@@ -148,11 +216,12 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
       }
 
       setStep("uploading");
-      const { ok, fail } = await uploadBatch(files, (okCount, failCount) => {
+      const { ok, fail, errors } = await uploadBatch(files, (okCount, failCount) => {
         setUploaded(okCount);
         setFailed(failCount);
       });
 
+      setUploadErrors(errors.slice(0, 10));
       setStep("done");
       onComplete?.(ok);
     } catch (err: any) {
@@ -163,6 +232,47 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
       setError(err.message || "Access denied or not supported");
       setStep("error");
     }
+  }
+
+  // Fallback: use webkitdirectory file input
+  async function handleFallbackFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    
+    const allFiles = Array.from(fileList);
+    const dirName = allFiles[0]?.webkitRelativePath?.split("/")[0] || "selected-folder";
+    setDirName(dirName);
+    setStep("scanning");
+
+    const files: File[] = [];
+    const skipped: string[] = [];
+    
+    for (const file of allFiles) {
+      if (isSupported(file.name)) {
+        files.push(file);
+      } else {
+        skipped.push(`${file.name} (unsupported type)`);
+      }
+    }
+
+    setFilesFound(files.length);
+    setSkippedFiles(skipped.slice(0, 50));
+    setTotalSeen(allFiles.length);
+
+    if (files.length === 0) {
+      setStep("done");
+      onComplete?.(0);
+      return;
+    }
+
+    setStep("uploading");
+    const { ok, fail, errors } = await uploadBatch(files, (okCount, failCount) => {
+      setUploaded(okCount);
+      setFailed(failCount);
+    });
+
+    setUploadErrors(errors.slice(0, 10));
+    setStep("done");
+    onComplete?.(ok);
   }
 
   // ─── IDLE ─ ask to begin ─────────────────────
@@ -179,18 +289,42 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
               Grant one-time access to your Desktop or Documents folder. Qyntra scans, parses, and indexes every
               supported file automatically — no drag-and-drop required.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => setStep("privacy")}
                 className="pixel text-[12px] px-4 py-2 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-2"
               >
                 <Shield size={13} /> Start ingestion
               </button>
-              {!isSupportedBrowser && (
-                <span className="text-[11px] text-[var(--bad)] flex items-center gap-1">
-                  <AlertCircle size={12} /> Chrome/Edge required
+              {!canUseNativePicker && (
+                <span className="text-[11px] text-[var(--gold)] flex items-center gap-1">
+                  <AlertCircle size={12} /> Fallback mode available below
                 </span>
               )}
+            </div>
+            
+            {/* Fallback file picker for all browsers */}
+            <div className="mt-4 pt-4 border-t border-[var(--line)]">
+              <div className="text-[12px] text-[var(--text-2)] mb-2 flex items-center gap-1.5">
+                <FolderOpen size={13} className="text-[var(--muted)]" />
+                <span className="text-[var(--muted)]">Or use fallback folder picker (works in all browsers):</span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                // @ts-ignore - webkitdirectory is a non-standard but widely supported attribute
+                webkitdirectory=""
+                directory=""
+                multiple
+                onChange={(e) => handleFallbackFiles(e.target.files)}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="pixel text-[11px] px-4 py-2 rounded border border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] text-[var(--text-2)] flex items-center gap-2"
+              >
+                <FolderOpen size={12} /> Pick folder via file dialog
+              </button>
             </div>
           </div>
         </div>
@@ -247,7 +381,7 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={startIngestion}
-            disabled={!isSupportedBrowser}
+            disabled={!canUseNativePicker}
             className="pixel text-[12px] px-5 py-2.5 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-2 disabled:opacity-50"
           >
             <FolderOpen size={13} />
@@ -260,6 +394,12 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
             Cancel
           </button>
         </div>
+        
+        {!canUseNativePicker && (
+          <div className="mt-3 text-[11px] text-[var(--gold)]">
+            Your browser doesn't support the native folder picker. Use the fallback picker on the main card instead.
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -284,7 +424,7 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
               {step === "uploading" && `Ingesting ${filesFound} files…`}
             </div>
             <div className="text-[12px] text-[var(--muted)]">
-              {step === "scanning" && "Reading file names and filtering supported types"}
+              {step === "scanning" && `Found ${filesFound} supported files${totalSeen > 0 ? ` out of ${totalSeen} total` : ""}`}
               {step === "uploading" && `${uploaded} uploaded · ${failed} failed · ${filesFound - uploaded - failed} remaining`}
             </div>
           </div>
@@ -303,8 +443,8 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
 
         <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
           <FileText size={11} />
-          {step === "scanning" && "Looking for TXT, MD, PDF, DOCX, CSV, JSON…"}
-              {step === "uploading" && "Parsing text and indexing it into your private workspace"}
+          {step === "scanning" && "Looking for TXT, MD, PDF, DOCX, CSV, JSON, JS, TS, PY, SQL, HTML, CSS, and more…"}
+          {step === "uploading" && "Parsing text and indexing into your private workspace"}
         </div>
 
         <button onClick={() => { abortRef.current = true; reset(); }} className="mt-3 text-[11px] text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1">
@@ -316,26 +456,61 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
 
   // ─── DONE ────────────────────────────────────
   if (step === "done") {
+    const hasFiles = uploaded > 0;
+    const allFailed = !hasFiles && failed > 0;
+    
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        className={`rounded-xl border border-[var(--good)]/30 bg-[var(--good)]/5 ${variant === "page" ? "p-6" : "p-5"}`}
+        className={`rounded-xl border ${hasFiles ? "border-[var(--good)]/30 bg-[var(--good)]/5" : allFailed ? "border-[var(--bad)]/30 bg-[var(--bad)]/5" : "border-[var(--gold)]/30 bg-[var(--gold)]/5"} ${variant === "page" ? "p-6" : "p-5"}`}
       >
         <div className="flex items-start gap-4">
-          <div className="size-12 rounded-lg bg-[var(--good)]/15 border border-[var(--good)]/30 flex items-center justify-center flex-shrink-0">
-            <CheckCircle size={22} className="text-[var(--good)]" />
+          <div className={`size-12 rounded-lg flex items-center justify-center flex-shrink-0 ${hasFiles ? "bg-[var(--good)]/15 border border-[var(--good)]/30" : allFailed ? "bg-[var(--bad)]/15 border border-[var(--bad)]/30" : "bg-[var(--gold)]/15 border border-[var(--gold)]/30"}`}>
+            {hasFiles ? <CheckCircle size={22} className="text-[var(--good)]" /> : allFailed ? <AlertCircle size={22} className="text-[var(--bad)]" /> : <FileText size={22} className="text-[var(--gold)]" />}
           </div>
           <div className="flex-1">
             <div className="text-[16px] font-medium mb-1">
-              {uploaded > 0 ? `${uploaded} files ingested` : "No matching files found"}
+              {hasFiles ? `${uploaded} file${uploaded > 1 ? "s" : ""} ingested` : allFailed ? "All uploads failed" : "No matching files found"}
             </div>
             <p className="text-[13px] text-[var(--text-2)] leading-relaxed mb-4">
-              {uploaded > 0
+              {hasFiles
                 ? `Your ${uploaded} file${uploaded > 1 ? "s" : ""} from "${dirName}" are now in your private workspace. Search, ask, and explore them in the galaxy.`
-                : `We didn't find any supported files in "${dirName}". Supported: TXT, MD, PDF, DOCX, CSV, JSON.`}
+                : allFailed
+                ? `${failed} files failed to upload. Check the error details below.`
+                : `We didn't find any supported files in "${dirName}". ${totalSeen > 0 ? `Scanned ${totalSeen} total files. ` : ""}Supported types include TXT, MD, PDF, DOCX, CSV, JSON, JS, TS, PY, SQL, HTML, CSS, and many more.`}
             </p>
-            <div className="flex items-center gap-3">
+            
+            {skippedFiles.length > 0 && (
+              <div className="mb-3">
+                <button
+                  onClick={() => setShowSkipped((s) => !s)}
+                  className="text-[11px] text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1 mb-1"
+                >
+                  {showSkipped ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                  {skippedFiles.length} skipped files
+                </button>
+                {showSkipped && (
+                  <div className="max-h-[120px] overflow-y-auto text-[10px] text-[var(--muted)] mono p-2 rounded bg-[var(--bg-2)] border border-[var(--line)]">
+                    {skippedFiles.map((s, i) => (
+                      <div key={i}>{s}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {uploadErrors.length > 0 && (
+              <div className="mb-3 p-2 rounded bg-[var(--bad)]/5 border border-[var(--bad)]/20">
+                <div className="text-[10px] text-[var(--bad)] mono">
+                  {uploadErrors.map((e, i) => (
+                    <div key={i}>{e}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={reset}
                 className="pixel text-[11px] px-4 py-2 rounded border border-[var(--line)] hover:bg-[var(--bg-1)] flex items-center gap-1.5"
@@ -372,6 +547,22 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
                 className="pixel text-[11px] px-4 py-2 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-1.5"
               >
                 <ArrowRight size={11} /> Try again
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                // @ts-ignore
+                webkitdirectory=""
+                directory=""
+                multiple
+                onChange={(e) => { handleFallbackFiles(e.target.files); }}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="pixel text-[11px] px-4 py-2 rounded border border-[var(--line)] hover:bg-[var(--bg-1)] text-[var(--text-2)] flex items-center gap-1.5"
+              >
+                <FolderOpen size={11} /> Use fallback picker
               </button>
             </div>
           </div>

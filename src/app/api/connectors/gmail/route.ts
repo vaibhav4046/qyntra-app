@@ -1,19 +1,14 @@
-import { auth, getOAuthToken } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ messages: [], error: "Sign in first." }, { status: 401 });
-  }
-
-  const accessToken = await getOAuthToken(session.user.id, "google");
-  if (!accessToken) {
+  if (!session?.accessToken || session.provider !== "google") {
     return Response.json({ messages: [], error: "Sign in with Google first." }, { status: 401 });
   }
 
   const listRes = await fetch(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=in:inbox",
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: { Authorization: `Bearer ${session.accessToken}` } }
   );
   if (!listRes.ok) {
     return Response.json({ messages: [], error: `Gmail API: ${listRes.status}` }, { status: listRes.status });
@@ -25,7 +20,7 @@ export async function GET() {
     ids.map(async (id: string) => {
       const r = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: { Authorization: `Bearer ${session.accessToken}` } }
       );
       if (!r.ok) return null;
       const m = await r.json();

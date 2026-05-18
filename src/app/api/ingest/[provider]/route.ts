@@ -30,7 +30,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ provid
   await ensureProfile(session.user.id, session.user.email, session.user.name);
 
   try {
-    const accessToken = await getSessionAccessTokenForIngest(session.user.id, provider, session.provider);
+    const accessToken = await getSessionAccessTokenForIngest(session, provider);
     const result = await runIngest(provider, accessToken, session.user.id);
     return Response.json(result);
   } catch (err) {

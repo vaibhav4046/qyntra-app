@@ -2,13 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useSession, signOut } from "next-auth/react";
 import { Settings, Plug, LogOut, User, Beaker } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
 
 export function AvatarMenu() {
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const { data: session } = useSession();
   const { demoMode, setDemoMode } = useProfileStore();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -21,11 +20,10 @@ export function AvatarMenu() {
     return () => window.removeEventListener("mousedown", onClick);
   }, []);
 
-  const email = user?.emailAddresses?.[0]?.emailAddress;
-  const name = user?.firstName && user?.lastName
-    ? `${user.firstName} ${user.lastName}`
-    : user?.username || email;
-  const initial = name?.[0]?.toUpperCase() || "U";
+  const initial =
+    session?.user?.name?.[0]?.toUpperCase() ||
+    session?.user?.email?.[0]?.toUpperCase() ||
+    "U";
 
   return (
     <div ref={wrapRef} className="relative">
@@ -33,7 +31,7 @@ export function AvatarMenu() {
         onClick={() => setOpen((o) => !o)}
         className="size-8 rounded-full bg-gradient-to-br from-[var(--ember)] to-[var(--gold)] flex items-center justify-center text-[11px] font-semibold text-white"
         aria-label="Account menu"
-        title={email || ""}
+        title={session?.user?.email || ""}
       >
         {initial}
       </button>
@@ -41,8 +39,8 @@ export function AvatarMenu() {
       {open && (
         <div className="absolute top-full right-0 mt-1.5 w-[240px] rounded-md border border-[var(--line-2)] bg-[var(--bg-2)] shadow-2xl z-50 overflow-hidden">
           <div className="px-3 py-3 border-b border-[var(--line)]">
-            <div className="text-[13px] truncate">{name || "Workspace"}</div>
-            <div className="mono cap text-[10px] text-[var(--muted)] truncate">{email}</div>
+            <div className="text-[13px] truncate">{session?.user?.name || "Workspace"}</div>
+            <div className="mono cap text-[10px] text-[var(--muted)] truncate">{session?.user?.email}</div>
           </div>
           <div className="py-1">
             <Link
@@ -75,7 +73,7 @@ export function AvatarMenu() {
           </div>
           <div className="border-t border-[var(--line)] py-1">
             <button
-              onClick={() => signOut({ redirectUrl: "/" })}
+              onClick={() => signOut({ callbackUrl: "/" })}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--bad)] hover:bg-[var(--bad)]/10 text-left"
             >
               <LogOut size={13} /> Sign out

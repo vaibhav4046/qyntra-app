@@ -42,7 +42,7 @@ export async function POST() {
 
   for (const provider of targets) {
     try {
-      const accessToken = await getSessionAccessTokenForIngest(session.user.id, provider, session.provider);
+      const accessToken = await getSessionAccessTokenForIngest(session, provider);
       const result = await runIngest(provider, accessToken, session.user.id);
       results.push({
         provider,

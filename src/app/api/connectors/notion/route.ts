@@ -1,20 +1,15 @@
-import { auth, getOAuthToken } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ pages: [], error: "Sign in first." }, { status: 401 });
-  }
-
-  const accessToken = await getOAuthToken(session.user.id, "notion");
-  if (!accessToken) {
+  if (!session?.accessToken || session.provider !== "notion") {
     return Response.json({ pages: [], error: "Sign in with Notion first." }, { status: 401 });
   }
 
   const res = await fetch("https://api.notion.com/v1/search", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${session.accessToken}`,
       "Notion-Version": "2022-06-28",
       "Content-Type": "application/json",
     },

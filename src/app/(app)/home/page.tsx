@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { ConnIcon } from "@/components/conn-icon";
 import { CONNECTORS, ACTIVITY } from "@/lib/data";
@@ -46,7 +46,7 @@ function greetingFor(hour: number): string {
 export default function HomePage() {
   const router = useRouter();
   const { demoMode, init, setDemoMode } = useProfileStore();
-  const { user } = useUser();
+  const { data: session } = useSession();
   const [activityFilter, setActivityFilter] = useState<"all" | "claims" | "entities" | "imports">("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
@@ -104,8 +104,8 @@ export default function HomePage() {
   const activity = demoMode ? ACTIVITY : [];
 
   const userName = useMemo(
-    () => firstName(user?.firstName + " " + (user?.lastName || "")) || firstName(user?.emailAddresses?.[0]?.emailAddress),
-    [user]
+    () => firstName(session?.user?.name) || firstName(session?.user?.email),
+    [session]
   );
   const greeting = useMemo(() => (now ? greetingFor(now.getHours()) : "Welcome back"), [now]);
   const tz = useMemo(() => {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { type QConnector } from "@/lib/data";
 import { ConnIcon } from "@/components/conn-icon";
-import { useUser } from "@clerk/nextjs";
+import { signIn, useSession } from "next-auth/react";
 import { useConnectorStore } from "@/lib/connector-store";
 import { ConnectGuide } from "@/components/connect-guide";
 import { RefreshCw, Check, AlertCircle } from "lucide-react";
@@ -19,7 +19,7 @@ interface SyncState {
 }
 
 export default function SourcesPage() {
-  const { user } = useUser();
+  const { data: session } = useSession();
   const { demoMode } = useProfileStore();
   const { connectors: conns, syncing, init, toggle } = useConnectorStore();
   const [syncs, setSyncs] = useState<Record<string, SyncState>>({});
@@ -31,9 +31,28 @@ export default function SourcesPage() {
   function connectReal(c: QConnector) {
     const providerId = c.provider;
     if (!providerId || providerId === "local") return;
-    // With Clerk, users connect additional accounts via the sign-in page
-    // or by signing in with that provider directly. For now, redirect to signin.
-    window.location.href = `/signin?redirect_url=/sources`;
+    // Auth.js v5 beta.31 client bug: signIn() uses broken GET redirect.
+    // POST a form directly to /api/auth/signin/{provider} instead.
+    fetch("/api/auth/csrf", { credentials: "include" })
+      .then((r) => r.json())
+      .then(({ csrfToken }) => {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = `/api/auth/signin/${providerId}`;
+        form.style.display = "none";
+
+        const cb = document.createElement("input");
+        cb.type = "hidden"; cb.name = "callbackUrl"; cb.value = "/sources";
+        form.appendChild(cb);
+
+        const csrf = document.createElement("input");
+        csrf.type = "hidden"; csrf.name = "csrfToken"; csrf.value = csrfToken;
+        form.appendChild(csrf);
+
+        document.body.appendChild(form);
+        form.submit();
+      })
+      .catch(() => signIn(providerId, { callbackUrl: "/sources" }));
   }
 
   async function syncNow(c: QConnector) {
@@ -77,7 +96,7 @@ export default function SourcesPage() {
         <div className="mono cap text-[11px] text-[var(--ember)] mb-2">Surface 04 - Manage your connectors</div>
         <h1 className="text-[26px] sm:text-[36px] font-bold tracking-tight leading-tight">Plug in everywhere you already remember.</h1>
         <p className="mono cap text-[11px] text-[var(--muted)] mt-2">
-          CONNECTORS - {onCount} OF {conns.length} ACTIVE - LOCAL-FIRST INGESTION{user?.emailAddresses?.[0]?.emailAddress && ` - ${user.emailAddresses[0].emailAddress}`}
+          CONNECTORS - {onCount} OF {conns.length} ACTIVE - LOCAL-FIRST INGESTION{session?.user && ` - ${session.user.email}`}
         </p>
       </div>
 
