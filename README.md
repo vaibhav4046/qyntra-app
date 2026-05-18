@@ -275,6 +275,16 @@ qyntra-app/
 2. **Connect** — Pick a desktop folder, or OAuth with Google/GitHub/Notion
 3. **Explore** — Files → Ask → Read → Galaxy. All your knowledge, alive.
 <img width="1880" height="901" alt="image" src="https://github.com/user-attachments/assets/d9808b24-4937-4bba-8e4e-329455bf5f23" />
+<img width="1906" height="911" alt="image" src="https://github.com/user-attachments/assets/e45e5694-5604-41c8-b106-bfd80f24006f" />
+<img width="1900" height="909" alt="image" src="https://github.com/user-attachments/assets/68f4bafb-7311-46f9-b15e-415cc58100bc" />
+<img width="1907" height="899" alt="image" src="https://github.com/user-attachments/assets/74500e02-bf95-4493-b8b7-00918ac1b352" />
+<img width="1909" height="903" alt="image" src="https://github.com/user-attachments/assets/a986e455-f7d6-41cd-b184-3edeed619f91" />
+<img width="1906" height="889" alt="image" src="https://github.com/user-attachments/assets/2fd252f0-f52d-4584-ab47-41917b36c0ab" />
+<img width="1903" height="897" alt="image" src="https://github.com/user-attachments/assets/295be9f4-cee0-474d-b971-54cc199eb284" />
+<img width="1907" height="914" alt="image" src="https://github.com/user-attachments/assets/3283b778-c885-4853-99b7-8e176db617d9" />
+<img width="1910" height="893" alt="image" src="https://github.com/user-attachments/assets/b3ded177-f536-42fc-b1af-0381e9ec8479" />
+<img width="1883" height="898" alt="image" src="https://github.com/user-attachments/assets/faa014e5-c482-42c1-8a34-6641d49b43e2" />
+
 
 
 ---
