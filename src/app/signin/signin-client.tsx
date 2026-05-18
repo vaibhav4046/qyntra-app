@@ -28,7 +28,16 @@ export function SignInClient() {
     fetch("/api/auth/providers")
       .then((r) => r.json())
       .then((json) => {
-        setConfigured((json.providers || []).map((p: any) => p.id));
+        // Auth.js built-in format: { providerId: { id, name, type, ... } }
+        // Custom format: { providers: [{ id, name }] }
+        let ids: string[] = [];
+        if (Array.isArray(json.providers)) {
+          ids = json.providers.map((p: any) => p.id);
+        } else if (typeof json === "object" && json !== null) {
+          // Auth.js built-in format
+          ids = Object.values(json).map((p: any) => p.id).filter(Boolean);
+        }
+        setConfigured(ids);
         setLoadingProviders(false);
       })
       .catch(() => setLoadingProviders(false));
@@ -131,7 +140,7 @@ export function SignInClient() {
                   : "Same provider you signed up with."}
               </p>
 
-              {noProviders && <SetupGuide />}
+              {noProviders && <SetupGuide configured={configured} />}
 
               {!noProviders && (
                 <div className="space-y-2">
@@ -188,7 +197,7 @@ export function SignInClient() {
   );
 }
 
-function SetupGuide() {
+function SetupGuide({ configured }: { configured: string[] }) {
   const [copied, setCopied] = useState<string | null>(null);
 
   function copy(text: string, id: string) {
@@ -200,8 +209,9 @@ function SetupGuide() {
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
-  const guides = [
+  const allGuides = [
     {
+      id: "google",
       name: "Google",
       link: "https://console.cloud.google.com/apis/credentials",
       steps: [
@@ -213,6 +223,7 @@ function SetupGuide() {
       env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
     },
     {
+      id: "github",
       name: "GitHub",
       link: "https://github.com/settings/developers",
       steps: [
@@ -223,6 +234,7 @@ function SetupGuide() {
       env: ["GITHUB_ID", "GITHUB_SECRET"],
     },
     {
+      id: "notion",
       name: "Notion",
       link: "https://www.notion.so/my-integrations",
       steps: [
@@ -234,16 +246,20 @@ function SetupGuide() {
     },
   ];
 
+  const guides = allGuides.filter((g) => !configured.includes(g.id));
+
   return (
     <div className="space-y-3">
       <div className="p-3 rounded border border-[var(--gold)]/30 bg-[var(--gold)]/5 flex items-start gap-2">
         <AlertCircle size={14} className="text-[var(--gold)] mt-0.5 flex-shrink-0" />
         <div className="text-[12px] text-[var(--text-2)] leading-relaxed">
-          No OAuth providers are configured yet. Add the environment variables below in your{" "}
+          {guides.length === 0
+            ? "All sign-in providers are configured. If buttons still don't appear, redeploy the project."
+            : "Some sign-in providers need configuration. Add the missing environment variables in your Vercel Dashboard → Project → Settings → Environment Variables, then redeploy."}
+          {" "}
           <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-[var(--ember)] hover:underline">
-            Vercel Dashboard → Project → Settings → Environment Variables
+            Open Vercel Dashboard
           </a>
-          . The sign-in buttons will appear instantly after redeploy.
         </div>
       </div>
 
