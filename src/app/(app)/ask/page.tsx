@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Send,
@@ -15,9 +15,15 @@ import {
   Shield,
   Zap,
   MessageSquare,
+  BrainCircuit,
+  AlertCircle,
 } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
 import { useChatStore } from "@/lib/chat-store";
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
 
 const SUGGESTIONS = [
   "Summarize what I've learned about retrieval this quarter",
@@ -34,6 +40,9 @@ export default function AskPage() {
   const [mode, setMode] = useState<"DEEP" | "WEB">("DEEP");
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [seedConsumed, setSeedConsumed] = useState(false);
+  const [tokenInfo, setTokenInfo] = useState<{ input: number; output: number } | null>(null);
+  const [corpusInfo, setCorpusInfo] = useState<{ files: number; chars: number } | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { demoMode, init: initProfile } = useProfileStore();
   const {
@@ -79,6 +88,7 @@ export default function AskPage() {
 
   async function sendSeeded(userText: string) {
     if (streaming) return;
+    setChatError(null);
     setInput("");
     pushMessage({ role: "user", content: userText });
     pushMessage({ role: "assistant", content: "" });
@@ -88,24 +98,37 @@ export default function AskPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, demoMode, permissionMode }),
+        body: JSON.stringify({ messages: history, demoMode }),
       });
       if (!res.ok || !res.body) {
-        updateAssistant(`[Error] ${res.statusText}`);
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        updateAssistant(`[Error] ${err.error || res.statusText}`);
         setStreaming(false);
         return;
       }
+      // Read metadata headers
+      const inputTokens = parseInt(res.headers.get("X-Input-Tokens") || "0", 10);
+      const corpusFiles = parseInt(res.headers.get("X-Corpus-Files") || "0", 10);
+      const corpusChars = parseInt(res.headers.get("X-Corpus-Chars") || "0", 10);
+      if (corpusFiles) setCorpusInfo({ files: corpusFiles, chars: corpusChars });
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
+      let outputTokens = 0;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        acc += decoder.decode(value, { stream: true });
+        const decoded = decoder.decode(value, { stream: true });
+        acc += decoded;
+        outputTokens += estimateTokens(decoded);
         updateAssistant(acc);
       }
+      setTokenInfo({ input: inputTokens, output: outputTokens });
     } catch (err) {
-      updateAssistant(`[Error] ${(err as Error).message}`);
+      const msg = (err as Error).message;
+      updateAssistant(`[Error] ${msg}`);
+      setChatError(msg);
     } finally {
       setStreaming(false);
     }
@@ -143,6 +166,7 @@ export default function AskPage() {
 
   async function send() {
     if (!input.trim() || streaming) return;
+    setChatError(null);
     const userText = input;
     setInput("");
     if (!activeId) newChat();
@@ -159,7 +183,7 @@ export default function AskPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, demoMode, permissionMode }),
+        body: JSON.stringify({ messages: history, demoMode }),
       });
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "Request failed" }));
@@ -167,17 +191,29 @@ export default function AskPage() {
         setStreaming(false);
         return;
       }
+      // Read metadata headers
+      const inputTokens = parseInt(res.headers.get("X-Input-Tokens") || "0", 10);
+      const corpusFiles = parseInt(res.headers.get("X-Corpus-Files") || "0", 10);
+      const corpusChars = parseInt(res.headers.get("X-Corpus-Chars") || "0", 10);
+      if (corpusFiles) setCorpusInfo({ files: corpusFiles, chars: corpusChars });
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
+      let outputTokens = 0;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        acc += decoder.decode(value, { stream: true });
+        const decoded = decoder.decode(value, { stream: true });
+        acc += decoded;
+        outputTokens += estimateTokens(decoded);
         updateAssistant(acc);
       }
+      setTokenInfo({ input: inputTokens, output: outputTokens });
     } catch (err) {
-      updateAssistant(`[Error] ${(err as Error).message}`);
+      const msg = (err as Error).message;
+      updateAssistant(`[Error] ${msg}`);
+      setChatError(msg);
     } finally {
       setStreaming(false);
     }
@@ -250,7 +286,12 @@ export default function AskPage() {
       <div className="flex flex-col min-w-0 relative">
         <div className="px-6 sm:px-10 py-5 border-b border-[var(--line)] flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="mono cap text-[11px] text-[var(--ember)] mb-1">Surface 02 · Ask your wiki</div>
+            <div className="mono cap text-[11px] text-[var(--ember)] mb-1 flex items-center gap-2">
+              Surface 02 · Ask your wiki
+              {corpusInfo && corpusInfo.files > 0 && (
+                <span className="text-[var(--gold)]">· {corpusInfo.files} sources</span>
+              )}
+            </div>
             <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight truncate">
               {active?.title && active.messages.length > 0 ? active.title : "What do you want to remember today?"}
             </h1>
@@ -349,6 +390,11 @@ export default function AskPage() {
 
         <div className="border-t border-[var(--line)] px-6 sm:px-10 py-4 sm:py-5 bg-[var(--bg)]/60 backdrop-blur-md">
           <div className="max-w-[860px] mx-auto">
+            {chatError && (
+              <div className="mb-2 px-3 py-2 rounded border border-[var(--bad)]/30 bg-[var(--bad)]/5 flex items-center gap-2 text-[11px] text-[var(--bad)]">
+                <AlertCircle size={11} /> {chatError}
+              </div>
+            )}
             <div className="rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] focus-within:border-[var(--ember)]/40 transition">
               <textarea
                 value={input}
@@ -360,7 +406,7 @@ export default function AskPage() {
                 disabled={streaming}
               />
               <div className="flex items-center justify-between px-3 pb-3 gap-2 flex-wrap">
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 flex-wrap items-center">
                   <button
                     onClick={() => setMode("DEEP")}
                     className={`mono cap text-[10px] px-2.5 py-1.5 rounded flex items-center gap-1.5 transition ${
@@ -384,6 +430,11 @@ export default function AskPage() {
                   <span className="mono cap text-[10px] px-2.5 py-1.5 rounded text-[var(--muted)] flex items-center gap-1.5">
                     <FilesIcon size={11} /> SOURCES · ALL
                   </span>
+                  {tokenInfo && (
+                    <span className="mono text-[9px] text-[var(--muted)] px-2 py-1 rounded bg-[var(--bg-2)] border border-[var(--line)]">
+                      {tokenInfo.input + tokenInfo.output}t used
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={send}
@@ -401,29 +452,56 @@ export default function AskPage() {
 
       <aside className="hidden lg:flex flex-col border-l border-[var(--line)] bg-[var(--bg-1)] overflow-y-auto">
         <div className="p-6">
-          <div className="mono cap text-[11px] text-[var(--ember)] mb-4 flex items-center gap-2">
-            <Sparkles size={12} /> Predicted Follow-ups
-          </div>
-          <div className="space-y-2">
-            {[
-              { conf: 92, q: "Compare cost: hybrid retrieval at scale" },
-              { conf: 81, q: "Which legal corpus did Voyage win on?" },
-              { conf: 74, q: 'Draft the "GraphRAG vs RAG" page' },
-              { conf: 66, q: "What's contradictory in my retrieval notes?" },
-            ].map((p) => (
-              <button
-                key={p.q}
-                onClick={() => setInput(p.q)}
-                className="w-full text-left p-3 rounded-lg border border-[var(--line)] hover:border-[var(--ember)]/40 hover:bg-[var(--bg-2)] transition group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="mono text-[9px] text-[var(--gold)]">{p.conf}% MATCH</div>
-                  <div className="mono text-[9px] text-[var(--muted)] group-hover:text-[var(--ember)]">↵</div>
+          {corpusInfo && corpusInfo.files > 0 ? (
+            <>
+              <div className="mono cap text-[11px] text-[var(--ember)] mb-4 flex items-center gap-2">
+                <BrainCircuit size={12} /> Corpus Loaded
+              </div>
+              <div className="space-y-2 mb-4">
+                <div className="p-3 rounded-lg border border-[var(--line)] bg-[var(--bg-2)]">
+                  <div className="mono text-[9px] text-[var(--muted)] mb-1">FILES INDEXED</div>
+                  <div className="text-[18px] font-bold text-[var(--ember)]">{corpusInfo.files}</div>
                 </div>
-                <div className="text-[12.5px]">{p.q}</div>
-              </button>
-            ))}
-          </div>
+                <div className="p-3 rounded-lg border border-[var(--line)] bg-[var(--bg-2)]">
+                  <div className="mono text-[9px] text-[var(--muted)] mb-1">TOTAL CHARS</div>
+                  <div className="text-[18px] font-bold text-[var(--gold)]">{corpusInfo.chars.toLocaleString()}</div>
+                </div>
+                {tokenInfo && (
+                  <div className="p-3 rounded-lg border border-[var(--line)] bg-[var(--bg-2)]">
+                    <div className="mono text-[9px] text-[var(--muted)] mb-1">TOKENS USED</div>
+                    <div className="text-[18px] font-bold text-[var(--good)]">{tokenInfo.input + tokenInfo.output}</div>
+                    <div className="mono text-[9px] text-[var(--muted)] mt-1">{tokenInfo.input} in · {tokenInfo.output} out</div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mono cap text-[11px] text-[var(--ember)] mb-4 flex items-center gap-2">
+                <Sparkles size={12} /> Predicted Follow-ups
+              </div>
+              <div className="space-y-2">
+                {[
+                  { conf: 92, q: "Compare cost: hybrid retrieval at scale" },
+                  { conf: 81, q: "Which legal corpus did Voyage win on?" },
+                  { conf: 74, q: 'Draft the "GraphRAG vs RAG" page' },
+                  { conf: 66, q: "What's contradictory in my retrieval notes?" },
+                ].map((p) => (
+                  <button
+                    key={p.q}
+                    onClick={() => setInput(p.q)}
+                    className="w-full text-left p-3 rounded-lg border border-[var(--line)] hover:border-[var(--ember)]/40 hover:bg-[var(--bg-2)] transition group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="mono text-[9px] text-[var(--gold)]">{p.conf}% MATCH</div>
+                      <div className="mono text-[9px] text-[var(--muted)] group-hover:text-[var(--ember)]">↵</div>
+                    </div>
+                    <div className="text-[12.5px]">{p.q}</div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="mt-6 pt-6 border-t border-[var(--line)]">
             <div className="mono cap text-[11px] text-[var(--gold)] mb-3 flex items-center gap-2">
