@@ -1,167 +1,84 @@
-import NextAuth, { type DefaultSession } from "next-auth";
-import Google from "next-auth/providers/google";
-import GitHub from "next-auth/providers/github";
-import Notion from "next-auth/providers/notion";
-import Credentials from "next-auth/providers/credentials";
-import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
-import { verifyMagicToken } from "@/lib/magic-link";
+import { auth as clerkAuth, currentUser } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 
-declare module "next-auth" {
-  interface Session {
-    accessToken?: string;
-    refreshToken?: string;
-    provider?: string;
-    expiresAt?: number;
-    user: DefaultSession["user"] & { id?: string };
+export interface QSession {
+  user: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    image?: string | null;
+  };
+  accessToken?: string;
+  refreshToken?: string;
+  provider?: string;
+  expiresAt?: number;
+}
+
+/**
+ * Compatibility wrapper: returns a session-like object from Clerk.
+ * Call this in API routes and server components.
+ */
+export async function auth(): Promise<QSession | null> {
+  const { userId } = await clerkAuth();
+  if (!userId) return null;
+
+  const user = await currentUser();
+  if (!user) return null;
+
+  const email = user.emailAddresses[0]?.emailAddress;
+  const name = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || null;
+
+  // Detect which OAuth provider they signed in with
+  const external = user.externalAccounts?.[0];
+  const provider = external?.provider === "oauth_google"
+    ? "google"
+    : external?.provider === "oauth_github"
+    ? "github"
+    : external?.provider === "oauth_notion"
+    ? "notion"
+    : undefined;
+
+  return {
+    user: {
+      id: userId,
+      email: email || null,
+      name,
+      image: user.imageUrl || null,
+    },
+    provider,
+  };
+}
+
+/**
+ * Fetch an OAuth access token from Clerk for the given provider.
+ * Works for: google, github, notion (and their aliases drive/gmail).
+ */
+export async function getOAuthToken(userId: string, provider: string): Promise<string | undefined> {
+  const clerkProvider =
+    provider === "google" || provider === "drive" || provider === "gmail"
+      ? "oauth_google"
+      : provider === "github"
+      ? "oauth_github"
+      : provider === "notion"
+      ? "oauth_notion"
+      : null;
+
+  if (!clerkProvider) return undefined;
+
+  try {
+    const client = await clerkClient();
+    const response = await client.users.getUserOauthAccessToken(userId, clerkProvider);
+    return response.data[0]?.token;
+  } catch {
+    return undefined;
   }
 }
 
-// Prevent Next.js from inlining env vars at build time.
-// We read them at runtime so redeploys pick up new OAuth credentials
-// without requiring a clean build.
-function env(key: string): string | undefined {
-  return process.env[key];
+/**
+ * Sign-out helper for server actions / API routes.
+ * On the client, use useClerk().signOut() instead.
+ */
+export async function signOut() {
+  // Clerk handles sign-out via the client SDK or redirect to /signout
+  // This is a no-op for compatibility; client components handle the real sign-out.
 }
-
-const providers = [];
-
-if (env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET")) {
-  providers.push(
-    Google({
-      clientId: env("GOOGLE_CLIENT_ID")!,
-      clientSecret: env("GOOGLE_CLIENT_SECRET")!,
-      authorization: {
-        params: {
-          scope:
-            "openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.readonly",
-          access_type: "offline",
-          prompt: "consent",
-        },
-      },
-    })
-  );
-}
-
-if (env("GITHUB_ID") && env("GITHUB_SECRET")) {
-  providers.push(
-    GitHub({
-      clientId: env("GITHUB_ID")!,
-      clientSecret: env("GITHUB_SECRET")!,
-      authorization: {
-        params: {
-          scope: "read:user user:email repo gist read:org",
-        },
-      },
-    })
-  );
-}
-
-if (env("NOTION_CLIENT_ID") && env("NOTION_CLIENT_SECRET")) {
-  providers.push(
-    Notion({
-      clientId: env("NOTION_CLIENT_ID")!,
-      clientSecret: env("NOTION_CLIENT_SECRET")!,
-      redirectUri:
-        env("NOTION_REDIRECT_URI") ||
-        `${env("NEXTAUTH_URL") || "https://qyntra-app.vercel.app"}/api/auth/callback/notion`,
-    })
-  );
-}
-
-// Magic-link Credentials provider — always enabled. Authenticates via signed token.
-providers.push(
-  Credentials({
-    id: "magic",
-    name: "Magic Link",
-    credentials: {
-      token: { label: "Magic token", type: "text" },
-    },
-    async authorize(creds) {
-      const token = creds?.token;
-      if (!token || typeof token !== "string") return null;
-      const payload = verifyMagicToken(token);
-      if (!payload) return null;
-      const id = `email:${Buffer.from(payload.email).toString("hex").slice(0, 32)}`;
-      // Best-effort: ensure profile row exists
-      if (hasSupabase()) {
-        try {
-          const sb = supabaseAdmin();
-          await sb.from("profiles").upsert(
-            { id, email: payload.email, name: payload.name || null, provider: "email" },
-            { onConflict: "id" }
-          );
-        } catch {}
-      }
-      return {
-        id,
-        email: payload.email,
-        name: payload.name || null,
-      };
-    },
-  })
-);
-
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true,
-  providers,
-  session: { strategy: "jwt" },
-  callbacks: {
-    async signIn({ user, account, profile }) {
-      if (!hasSupabase() || !account || !user.email) return true;
-      // Credentials/magic provider already upserted in authorize()
-      if (account.provider === "magic") return true;
-      try {
-        const id = `${account.provider}:${account.providerAccountId}`;
-        const sb = supabaseAdmin();
-        await sb.from("profiles").upsert(
-          {
-            id,
-            email: user.email,
-            name: user.name || profile?.name || null,
-            image: user.image || null,
-            provider: account.provider,
-          },
-          { onConflict: "id" }
-        );
-      } catch (err) {
-        console.error("[auth.signIn] supabase upsert failed", err);
-      }
-      return true;
-    },
-    async jwt({ token, account, user }) {
-      if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.provider = account.provider;
-        if (account.provider === "magic" && user?.id) {
-          token.uid = user.id as string;
-        } else {
-          token.uid = `${account.provider}:${account.providerAccountId}`;
-        }
-        token.expiresAt = account.expires_at ?? undefined;
-      }
-      if (user) {
-        token.email = user.email;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
-      session.refreshToken = token.refreshToken as string;
-      session.provider = token.provider as string;
-      session.expiresAt = token.expiresAt as number | undefined;
-      (session.user as { id?: string }).id = token.uid as string | undefined;
-      return session;
-    },
-    async redirect({ url, baseUrl }) {
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      try {
-        if (new URL(url).origin === baseUrl) return url;
-      } catch {
-        // malformed URL → fall through to safe default
-      }
-      return `${baseUrl}/onboarding`;
-    },
-  },
-  pages: { signIn: "/signin" },
-});

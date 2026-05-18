@@ -10,7 +10,7 @@ import { Home, MessageSquare, BookOpen, FileText, Plug, Search, Boxes, Menu, X }
 import { Logo } from "./logo";
 import { SearchPopover } from "./search-popover";
 import { AvatarMenu } from "./avatar-menu";
-import { useSession, signOut } from "next-auth/react";
+import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState, useCallback } from "react";
 
 const ROUTES = [
@@ -25,7 +25,7 @@ const ROUTES = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { isSignedIn } = useAuth();
   const { connectors, init } = useConnectorStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -98,7 +98,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="mono cap text-[10px] hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded border border-[var(--ember)]/30 text-[var(--ember)]">
             <span className="size-1.5 rounded-full bg-[var(--ember)]" /> HYDRA
           </div>
-          {session?.user ? (
+          {isSignedIn ? (
             <AvatarMenu />
           ) : (
             <Link href="/signin" className="size-8 rounded-full bg-gradient-to-br from-[var(--ember)] to-[var(--gold)] flex items-center justify-center text-[11px] font-semibold">

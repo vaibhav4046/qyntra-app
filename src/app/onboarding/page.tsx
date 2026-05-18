@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSession } from "next-auth/react";
+import { useUser, useAuth } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
 import { ConnIcon } from "@/components/conn-icon";
 import { SplitText } from "@/components/split-text";
@@ -49,7 +49,8 @@ const LS_DEMO = "qyntra:demo-mode";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { user, isLoaded } = useUser();
+  const { isSignedIn } = useAuth();
   const [idx, setIdx] = useState(0);
   const [connected, setConnected] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -60,8 +61,8 @@ export default function OnboardingPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "unauthenticated") router.replace("/signin?callbackUrl=/onboarding");
-  }, [status, router]);
+    if (isLoaded && !isSignedIn) router.replace("/signin?callbackUrl=/onboarding");
+  }, [isLoaded, isSignedIn, router]);
 
   const step = STEPS[idx];
   const progress = ((idx + 1) / STEPS.length) * 100;
@@ -92,7 +93,7 @@ export default function OnboardingPage() {
     router.replace("/home");
   }
 
-  if (status === "loading") {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="animate-spin text-[var(--ember)]" size={28} />
@@ -181,10 +182,16 @@ export default function OnboardingPage() {
               <SplitText text={step.title} stagger={28} />
             </h1>
 
-            {step.id === "welcome" && <WelcomeStep email={session?.user?.email || ""} />}
+            {step.id === "welcome" && <WelcomeStep email={user?.emailAddresses?.[0]?.emailAddress || ""} />}
             {step.id === "cloud" && (
               <CloudStep
-                provider={session?.provider}
+                provider={(() => {
+                  const p = user?.externalAccounts?.[0]?.provider;
+                  if (p?.includes("google")) return "google";
+                  if (p?.includes("github")) return "github";
+                  if (p?.includes("notion")) return "notion";
+                  return undefined;
+                })()}
                 connected={!!connected.cloud}
                 onConnected={() => markConnected("cloud")}
               />
