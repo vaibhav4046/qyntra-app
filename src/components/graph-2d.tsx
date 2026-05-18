@@ -40,11 +40,13 @@ export function Graph2D({ nodes, edges }: Props) {
     }
 
     // Pre-compute uniform world positions for the node set. For many nodes,
-    // concentric rings avoid the cluster we get from raw x/y. For small N,
-    // use the curated x/y so the hand-tuned demo layout stays readable.
+    // we cluster by type — each type gets its own sector of the canvas
+    // so the graph reads as organised constellations.
     const positions = new Map<string, { x: number; y: number }>();
+    const clusterCentres = new Map<string, { cx: number; cy: number; r: number; color: string }>();
     function recomputePositions(W: number, H: number) {
       positions.clear();
+      clusterCentres.clear();
       const n = nodes.length;
       if (n <= 12) {
         for (const node of nodes) {
@@ -55,29 +57,30 @@ export function Graph2D({ nodes, edges }: Props) {
         }
         return;
       }
-      // Concentric rings: ring 0 = single center node, ring k holds 6k nodes
+      const byType: Record<string, QNode[]> = {};
+      for (const node of nodes) (byType[node.type] ||= []).push(node);
+      const types = Object.keys(byType);
       const cx = W * 0.5;
       const cy = H * 0.5;
-      const ringSpacing = Math.min(W, H) * 0.16;
-      let placed = 0;
-      let ring = 0;
-      while (placed < n) {
-        const count = ring === 0 ? 1 : Math.min(6 * ring, n - placed);
-        for (let i = 0; i < count && placed < n; i++) {
-          const node = nodes[placed];
-          if (ring === 0) {
-            positions.set(node.id, { x: cx, y: cy });
-          } else {
-            const angle = (i / count) * Math.PI * 2 + (ring * 0.5);
-            positions.set(node.id, {
-              x: cx + Math.cos(angle) * ringSpacing * ring,
-              y: cy + Math.sin(angle) * ringSpacing * ring,
-            });
-          }
-          placed++;
-        }
-        ring++;
-      }
+      const mainR = Math.min(W, H) * 0.32;
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      types.forEach((type, ti) => {
+        const angle = (ti / types.length) * Math.PI * 2 - Math.PI / 2;
+        const clusterCx = cx + Math.cos(angle) * mainR;
+        const clusterCy = cy + Math.sin(angle) * mainR;
+        const group = byType[type];
+        const clusterR = Math.max(40, Math.min(W, H) * 0.13);
+        clusterCentres.set(type, { cx: clusterCx, cy: clusterCy, r: clusterR + 30, color: TYPE_COLOR[type] });
+        group.forEach((node, gi) => {
+          // Phyllotaxis within cluster — clean spacing
+          const r = clusterR * Math.sqrt(gi / Math.max(1, group.length - 1));
+          const a = gi * goldenAngle;
+          positions.set(node.id, {
+            x: clusterCx + Math.cos(a) * r,
+            y: clusterCy + Math.sin(a) * r,
+          });
+        });
+      });
     }
 
     function worldXY(n: QNode) {
@@ -96,17 +99,31 @@ export function Graph2D({ nodes, edges }: Props) {
       frame++;
       ctx.clearRect(0, 0, W, H);
 
-      // Subtle grid
-      ctx.strokeStyle = "rgba(255,255,255,0.03)";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 40; i++) {
-        ctx.beginPath();
-        ctx.moveTo((i * W) / 40, 0);
-        ctx.lineTo((i * W) / 40, H);
-        ctx.stroke();
-      }
+      // Radial vignette — sleeker than a flat grid
+      const vignette = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.1, W * 0.5, H * 0.5, Math.max(W, H) * 0.85);
+      vignette.addColorStop(0, "rgba(255,91,31,0.03)");
+      vignette.addColorStop(0.6, "rgba(168,123,255,0.012)");
+      vignette.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
 
-      // Edges
+      // Cluster halos (soft glow behind each type cluster)
+      clusterCentres.forEach(({ cx, cy, r: cr, color }) => {
+        const ss = screenXY(cx, cy);
+        const screenR = cr * tRef.current.z;
+        const halo = ctx.createRadialGradient(ss.x, ss.y, screenR * 0.1, ss.x, ss.y, screenR);
+        halo.addColorStop(0, `${color}26`);
+        halo.addColorStop(0.6, `${color}0a`);
+        halo.addColorStop(1, `${color}00`);
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(ss.x, ss.y, screenR, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Edges — curved bezier with a control point pulled toward the canvas centre
+      const cxScreen = W * 0.5;
+      const cyScreen = H * 0.5;
       edges.forEach((e) => {
         const a = nodes.find((n) => n.id === e.from);
         const b = nodes.find((n) => n.id === e.to);
@@ -118,18 +135,29 @@ export function Graph2D({ nodes, edges }: Props) {
         const sb = screenXY(wb.x, wb.y);
         const isSel = selected && (e.from === selected || e.to === selected);
         const hasSel = !!selected;
-        ctx.strokeStyle = isSel
-          ? "rgba(255,193,92,0.85)"
-          : hasSel
-          ? "rgba(255,91,31,0.03)"
-          : nodes.length > 14
-          ? "rgba(255,91,31,0.07)"
-          : "rgba(255,91,31,0.15)";
-        ctx.lineWidth = isSel ? 1.8 : 0.7;
+        // Hide non-selected edges when something is selected — cleaner reading.
+        if (hasSel && !isSel) return;
+        const dx = sb.x - sa.x;
+        const dy = sb.y - sa.y;
+        const mx = (sa.x + sb.x) / 2;
+        const my = (sa.y + sb.y) / 2;
+        // Control point: pull midpoint toward canvas centre for bow-in feel
+        const toCenter = { x: cxScreen - mx, y: cyScreen - my };
+        const cp = { x: mx + toCenter.x * 0.18, y: my + toCenter.y * 0.18 };
+        const grad = ctx.createLinearGradient(sa.x, sa.y, sb.x, sb.y);
+        const baseColor = isSel ? "255,193,92" : "255,91,31";
+        const alphaA = isSel ? 0.95 : nodes.length > 14 ? 0.08 : 0.18;
+        const alphaB = isSel ? 0.5 : nodes.length > 14 ? 0.04 : 0.1;
+        grad.addColorStop(0, `rgba(${baseColor},${alphaA})`);
+        grad.addColorStop(1, `rgba(${baseColor},${alphaB})`);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = isSel ? 2 : 0.7;
         ctx.beginPath();
         ctx.moveTo(sa.x, sa.y);
-        ctx.lineTo(sb.x, sb.y);
+        ctx.quadraticCurveTo(cp.x, cp.y, sb.x, sb.y);
         ctx.stroke();
+        // Suppress unused vars in TS strict mode
+        void dx; void dy;
       });
 
       // Nodes

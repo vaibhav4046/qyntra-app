@@ -14,29 +14,42 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ExternalLink, RefreshCw, FileText } from "lucide-react";
 import { ConnIcon } from "./conn-icon";
 
-// Fibonacci-sphere positions cache: spreads N nodes uniformly across a sphere.
-// Much cleaner than packing nodes by their raw x/y/z when N > ~12.
+// Position cache. For small sets, use the hand-tuned x/y. For larger sets,
+// cluster by type — each type gets its own ring on the sphere so the
+// galaxy reads as organised constellations instead of a hairball.
 const POS_CACHE = new Map<string, [number, number, number]>();
 function computePositions(nodes: QNode[], radius: number) {
   POS_CACHE.clear();
   const n = nodes.length;
   if (n <= 12) {
-    // Keep the hand-tuned layout for small N (looks more curated)
     for (const node of nodes) {
       POS_CACHE.set(node.id, [(node.x - 0.5) * 14, (node.y - 0.5) * -10, (node.z ?? 0) * 6]);
     }
     return;
   }
-  // Fibonacci sphere for many nodes
-  const phi = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (i / Math.max(1, n - 1)) * 2; // 1 → -1
-    const r = Math.sqrt(1 - y * y);
-    const theta = phi * i;
-    const x = Math.cos(theta) * r;
-    const z = Math.sin(theta) * r;
-    POS_CACHE.set(nodes[i].id, [x * radius, y * radius * 0.7, z * radius]);
+  // Group nodes by type, each group lives at a different latitude band.
+  // Within a group, distribute uniformly around the ring (golden-angle).
+  const byType: Record<string, QNode[]> = {};
+  for (const node of nodes) {
+    (byType[node.type] ||= []).push(node);
   }
+  const types = Object.keys(byType);
+  const phi = Math.PI * (3 - Math.sqrt(5));
+  types.forEach((type, ti) => {
+    // Latitude: spread types between +0.75 and -0.75 of vertical extent
+    const lat = types.length === 1 ? 0 : ((ti / (types.length - 1)) - 0.5) * 1.5;
+    const y = lat;
+    const ringR = Math.sqrt(Math.max(0.0001, 1 - y * y));
+    const group = byType[type];
+    group.forEach((node, gi) => {
+      // Spiral within group for clean spacing
+      const theta = phi * gi + ti * 0.5;
+      const jitter = 0.06 * Math.sin(gi * 13.37);
+      const x = Math.cos(theta) * ringR * (1 + jitter);
+      const z = Math.sin(theta) * ringR * (1 + jitter);
+      POS_CACHE.set(node.id, [x * radius, y * radius * 0.85, z * radius]);
+    });
+  });
 }
 function nodePos(n: QNode): [number, number, number] {
   return POS_CACHE.get(n.id) || [(n.x - 0.5) * 14, (n.y - 0.5) * -10, (n.z ?? 0) * 6];
@@ -158,34 +171,49 @@ function NodeMesh({ node, onClick, selected, predicted, soldier }: { node: QNode
   );
 }
 
+// Build a smooth curved arc between two 3D points using a Catmull-Rom curve.
+// Looks dramatically less wireframe-y than straight lines.
+function arcPoints(a: [number, number, number], b: [number, number, number], segments = 18): THREE.Vector3[] {
+  const va = new THREE.Vector3(...a);
+  const vb = new THREE.Vector3(...b);
+  // Midpoint pushed outward from origin → arc bows away from sphere centre
+  const mid = va.clone().add(vb).multiplyScalar(0.5);
+  const dist = va.distanceTo(vb);
+  const outward = mid.clone().normalize().multiplyScalar(dist * 0.18);
+  mid.add(outward);
+  const curve = new THREE.QuadraticBezierCurve3(va, mid, vb);
+  return curve.getPoints(segments);
+}
+
 function Edges({ predictedTargets, edges, nodes, selectedId }: { predictedTargets: string[]; edges: QEdge[]; nodes: QNode[]; selectedId: string | null }) {
   const hasSelection = !!selectedId;
+  const nodeMap = useMemo(() => {
+    const m = new Map<string, QNode>();
+    for (const n of nodes) m.set(n.id, n);
+    return m;
+  }, [nodes]);
   return (
     <>
       {edges.map((e, i) => {
-        const a = nodes.find((n) => n.id === e.from);
-        const b = nodes.find((n) => n.id === e.to);
+        const a = nodeMap.get(e.from);
+        const b = nodeMap.get(e.to);
         if (!a || !b) return null;
         const isPred = predictedTargets.includes(e.to) || predictedTargets.includes(e.from);
         const touchesSelected = hasSelection && (e.from === selectedId || e.to === selectedId);
-        // When something is selected, dim all edges that don't touch it.
-        // When nothing is selected, draw edges very faint so 200+ edges don't overwhelm.
-        const baseOpacity = hasSelection
-          ? touchesSelected
-            ? 0.9
-            : 0.04
-          : isPred
-          ? 0.55
-          : 0.08;
+        // Hide background edges entirely when something is selected — only show the
+        // 1-hop subgraph. Cleaner reading at scale.
+        if (hasSelection && !touchesSelected) return null;
+        const baseOpacity = touchesSelected ? 0.9 : isPred ? 0.55 : 0.06;
         const color = touchesSelected ? "#ffc15c" : isPred ? "#ffc15c" : "#ff5b1f";
+        const pts = arcPoints(nodePos(a), nodePos(b));
         return (
           <Line
             key={i}
-            points={[nodePos(a), nodePos(b)]}
+            points={pts}
             color={color}
             opacity={baseOpacity}
             transparent
-            lineWidth={touchesSelected ? 2.2 : isPred ? 1.8 : 1}
+            lineWidth={touchesSelected ? 2.2 : isPred ? 1.6 : 0.9}
           />
         );
       })}
@@ -233,21 +261,30 @@ function Scene({ selected, setSelected, predictedTargets, nodes: propNodes, edge
   return (
     <>
       <color attach="background" args={["#040506"]} />
-      <fog attach="fog" args={["#040506", fogNear, fogFar]} />
-      <Stars radius={60} depth={60} count={3500} factor={5} fade speed={0.8} />
+      <fog attach="fog" args={["#050608", fogNear, fogFar]} />
+      <Stars radius={80} depth={80} count={5500} factor={4} fade speed={0.5} />
       {/* Distant nebula spheres */}
-      <mesh position={[20, 8, -20]}>
-        <sphereGeometry args={[6, 16, 16]} />
-        <meshBasicMaterial color="#ff5b1f" transparent opacity={0.06} />
+      <mesh position={[radius * 1.4, radius * 0.5, -radius * 1.4]}>
+        <sphereGeometry args={[radius * 0.5, 24, 24]} />
+        <meshBasicMaterial color="#ff5b1f" transparent opacity={0.05} />
       </mesh>
-      <mesh position={[-22, -6, -18]}>
-        <sphereGeometry args={[8, 16, 16]} />
-        <meshBasicMaterial color="#a87bff" transparent opacity={0.05} />
+      <mesh position={[-radius * 1.6, -radius * 0.4, -radius * 1.2]}>
+        <sphereGeometry args={[radius * 0.65, 24, 24]} />
+        <meshBasicMaterial color="#a87bff" transparent opacity={0.04} />
       </mesh>
-      <ambientLight intensity={0.35} />
-      <pointLight position={[10, 10, 10]} intensity={1.6} color="#ff5b1f" />
-      <pointLight position={[-10, -10, -10]} intensity={0.9} color="#a87bff" />
-      <pointLight position={[0, 0, 5]} intensity={0.6} color="#ffc15c" />
+      {/* Faint equator and meridian rings (premium constellation feel) */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[radius, 0.015, 8, 96]} />
+        <meshBasicMaterial color="#ff5b1f" transparent opacity={0.18} />
+      </mesh>
+      <mesh rotation={[0, 0, Math.PI / 2]}>
+        <torusGeometry args={[radius * 0.85, 0.01, 8, 96]} />
+        <meshBasicMaterial color="#ffc15c" transparent opacity={0.12} />
+      </mesh>
+      <ambientLight intensity={0.45} />
+      <pointLight position={[radius, radius, radius]} intensity={1.4} color="#ff5b1f" />
+      <pointLight position={[-radius, -radius * 0.5, -radius]} intensity={0.7} color="#a87bff" />
+      <pointLight position={[0, 0, radius * 0.6]} intensity={0.5} color="#ffc15c" />
       <Edges predictedTargets={predictedTargets} edges={edges} nodes={nodes} selectedId={selected} />
       {nodes.map((n) => (
         <NodeMesh
