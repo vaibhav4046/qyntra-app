@@ -39,8 +39,49 @@ export function Graph2D({ nodes, edges }: Props) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
-    function worldXY(n: QNode, W: number, H: number) {
-      return { x: (n.x - 0.5) * W * 1.4 + W * 0.5, y: (n.y - 0.5) * H * 1.3 + H * 0.5 };
+    // Pre-compute uniform world positions for the node set. For many nodes,
+    // concentric rings avoid the cluster we get from raw x/y. For small N,
+    // use the curated x/y so the hand-tuned demo layout stays readable.
+    const positions = new Map<string, { x: number; y: number }>();
+    function recomputePositions(W: number, H: number) {
+      positions.clear();
+      const n = nodes.length;
+      if (n <= 12) {
+        for (const node of nodes) {
+          positions.set(node.id, {
+            x: (node.x - 0.5) * W * 1.4 + W * 0.5,
+            y: (node.y - 0.5) * H * 1.3 + H * 0.5,
+          });
+        }
+        return;
+      }
+      // Concentric rings: ring 0 = single center node, ring k holds 6k nodes
+      const cx = W * 0.5;
+      const cy = H * 0.5;
+      const ringSpacing = Math.min(W, H) * 0.16;
+      let placed = 0;
+      let ring = 0;
+      while (placed < n) {
+        const count = ring === 0 ? 1 : Math.min(6 * ring, n - placed);
+        for (let i = 0; i < count && placed < n; i++) {
+          const node = nodes[placed];
+          if (ring === 0) {
+            positions.set(node.id, { x: cx, y: cy });
+          } else {
+            const angle = (i / count) * Math.PI * 2 + (ring * 0.5);
+            positions.set(node.id, {
+              x: cx + Math.cos(angle) * ringSpacing * ring,
+              y: cy + Math.sin(angle) * ringSpacing * ring,
+            });
+          }
+          placed++;
+        }
+        ring++;
+      }
+    }
+
+    function worldXY(n: QNode) {
+      return positions.get(n.id) || { x: 0, y: 0 };
     }
     function screenXY(wx: number, wy: number) {
       const t = tRef.current;
@@ -51,6 +92,7 @@ export function Graph2D({ nodes, edges }: Props) {
       const r = canvas.getBoundingClientRect();
       const W = r.width;
       const H = r.height;
+      if (positions.size !== nodes.length) recomputePositions(W, H);
       frame++;
       ctx.clearRect(0, 0, W, H);
 
@@ -70,13 +112,20 @@ export function Graph2D({ nodes, edges }: Props) {
         const b = nodes.find((n) => n.id === e.to);
         if (!a || !b) return;
         if (filter !== "all" && a.type !== filter && b.type !== filter) return;
-        const wa = worldXY(a, W, H);
-        const wb = worldXY(b, W, H);
+        const wa = worldXY(a);
+        const wb = worldXY(b);
         const sa = screenXY(wa.x, wa.y);
         const sb = screenXY(wb.x, wb.y);
         const isSel = selected && (e.from === selected || e.to === selected);
-        ctx.strokeStyle = isSel ? "rgba(255,193,92,0.7)" : "rgba(255,91,31,0.15)";
-        ctx.lineWidth = isSel ? 1.6 : 0.8;
+        const hasSel = !!selected;
+        ctx.strokeStyle = isSel
+          ? "rgba(255,193,92,0.85)"
+          : hasSel
+          ? "rgba(255,91,31,0.03)"
+          : nodes.length > 14
+          ? "rgba(255,91,31,0.07)"
+          : "rgba(255,91,31,0.15)";
+        ctx.lineWidth = isSel ? 1.8 : 0.7;
         ctx.beginPath();
         ctx.moveTo(sa.x, sa.y);
         ctx.lineTo(sb.x, sb.y);
@@ -85,7 +134,7 @@ export function Graph2D({ nodes, edges }: Props) {
 
       // Nodes
       visibleNodes.forEach((n) => {
-        const w = worldXY(n, W, H);
+        const w = worldXY(n);
         const s = screenXY(w.x, w.y);
         const baseR = n.size === "lg" ? 14 : n.size === "md" ? 10 : 7;
         const color = TYPE_COLOR[n.type];
@@ -111,11 +160,21 @@ export function Graph2D({ nodes, edges }: Props) {
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        if (n.size !== "sm" || isHover || isSel) {
+        // Only label hovered/selected nodes (and large nodes when nodes are sparse)
+        const sparse = visibleNodes.length <= 14;
+        if (isHover || isSel || (sparse && n.size === "lg")) {
           ctx.fillStyle = isSel ? "#ffc15c" : "#f4f4f5";
           ctx.font = '12px "JetBrains Mono", monospace';
           ctx.textAlign = "left";
-          ctx.fillText(n.label, s.x + baseR + 4, s.y + 4);
+          // Background pill behind label for readability
+          const text = n.label;
+          const metrics = ctx.measureText(text);
+          const tx = s.x + baseR + 6;
+          const ty = s.y + 4;
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.fillRect(tx - 4, ty - 11, metrics.width + 8, 16);
+          ctx.fillStyle = isSel ? "#ffc15c" : "#f4f4f5";
+          ctx.fillText(text, tx, ty);
         }
       });
 
@@ -128,7 +187,7 @@ export function Graph2D({ nodes, edges }: Props) {
       const H = r.height;
       for (let i = visibleNodes.length - 1; i >= 0; i--) {
         const n = visibleNodes[i];
-        const w = worldXY(n, W, H);
+        const w = worldXY(n);
         const s = screenXY(w.x, w.y);
         const baseR = n.size === "lg" ? 16 : n.size === "md" ? 12 : 9;
         if (Math.abs(mx - s.x) <= baseR && Math.abs(my - s.y) <= baseR) return n.id;

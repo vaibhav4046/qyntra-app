@@ -14,18 +14,44 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ExternalLink, RefreshCw, FileText } from "lucide-react";
 import { ConnIcon } from "./conn-icon";
 
+// Fibonacci-sphere positions cache: spreads N nodes uniformly across a sphere.
+// Much cleaner than packing nodes by their raw x/y/z when N > ~12.
+const POS_CACHE = new Map<string, [number, number, number]>();
+function computePositions(nodes: QNode[], radius: number) {
+  POS_CACHE.clear();
+  const n = nodes.length;
+  if (n <= 12) {
+    // Keep the hand-tuned layout for small N (looks more curated)
+    for (const node of nodes) {
+      POS_CACHE.set(node.id, [(node.x - 0.5) * 14, (node.y - 0.5) * -10, (node.z ?? 0) * 6]);
+    }
+    return;
+  }
+  // Fibonacci sphere for many nodes
+  const phi = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const y = 1 - (i / Math.max(1, n - 1)) * 2; // 1 → -1
+    const r = Math.sqrt(1 - y * y);
+    const theta = phi * i;
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
+    POS_CACHE.set(nodes[i].id, [x * radius, y * radius * 0.7, z * radius]);
+  }
+}
 function nodePos(n: QNode): [number, number, number] {
-  return [(n.x - 0.5) * 14, (n.y - 0.5) * -10, (n.z ?? 0) * 6];
+  return POS_CACHE.get(n.id) || [(n.x - 0.5) * 14, (n.y - 0.5) * -10, (n.z ?? 0) * 6];
 }
 
 function NodeMesh({ node, onClick, selected, predicted, soldier }: { node: QNode; onClick: () => void; selected: boolean; predicted: boolean; soldier: THREE.Texture }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const padRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
   const color = TYPE_COLOR[node.type];
   const baseSize = node.size === "lg" ? 0.7 : node.size === "md" ? 0.5 : 0.35;
   const spriteH = baseSize * 2.4;
   const spriteW = spriteH * (98 / 134);
+  const showLabel = selected || predicted || hovered;
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
@@ -96,38 +122,44 @@ function NodeMesh({ node, onClick, selected, predicted, soldier }: { node: QNode
         <Billboard follow position={[0, 0.05, 0]}>
           <mesh
             onClick={(e) => { e.stopPropagation(); onClick(); }}
-            onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
-            onPointerOut={() => { document.body.style.cursor = "auto"; }}
+            onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = "pointer"; }}
+            onPointerOut={() => { setHovered(false); document.body.style.cursor = "auto"; }}
           >
             <planeGeometry args={[spriteW, spriteH]} />
             <meshBasicMaterial
               map={soldier}
               transparent
               alphaTest={0.1}
-              color={selected ? "#ffc15c" : predicted ? "#ffe9b3" : "#ffffff"}
+              color={selected ? "#ffc15c" : predicted ? "#ffe9b3" : hovered ? "#ffd7a8" : "#ffffff"}
               side={THREE.DoubleSide}
               depthWrite={false}
             />
           </mesh>
         </Billboard>
 
-        <Text
-          position={[0, spriteH * 0.65, 0]}
-          fontSize={0.2}
-          color={selected ? "#ffc15c" : "#f4f4f5"}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.012}
-          outlineColor="#000"
-        >
-          {node.label}
-        </Text>
+        {/* Label only when selected / predicted / hovered to avoid clutter at scale */}
+        {showLabel && (
+          <Billboard follow position={[0, spriteH * 0.7, 0]}>
+            <Text
+              fontSize={selected ? 0.26 : 0.2}
+              color={selected ? "#ffc15c" : predicted ? "#ffd7a8" : "#f4f4f5"}
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.018}
+              outlineColor="#000"
+              maxWidth={6}
+            >
+              {node.label}
+            </Text>
+          </Billboard>
+        )}
       </group>
     </Float>
   );
 }
 
-function Edges({ predictedTargets, edges, nodes }: { predictedTargets: string[]; edges: QEdge[]; nodes: QNode[] }) {
+function Edges({ predictedTargets, edges, nodes, selectedId }: { predictedTargets: string[]; edges: QEdge[]; nodes: QNode[]; selectedId: string | null }) {
+  const hasSelection = !!selectedId;
   return (
     <>
       {edges.map((e, i) => {
@@ -135,14 +167,25 @@ function Edges({ predictedTargets, edges, nodes }: { predictedTargets: string[];
         const b = nodes.find((n) => n.id === e.to);
         if (!a || !b) return null;
         const isPred = predictedTargets.includes(e.to) || predictedTargets.includes(e.from);
+        const touchesSelected = hasSelection && (e.from === selectedId || e.to === selectedId);
+        // When something is selected, dim all edges that don't touch it.
+        // When nothing is selected, draw edges very faint so 200+ edges don't overwhelm.
+        const baseOpacity = hasSelection
+          ? touchesSelected
+            ? 0.9
+            : 0.04
+          : isPred
+          ? 0.55
+          : 0.08;
+        const color = touchesSelected ? "#ffc15c" : isPred ? "#ffc15c" : "#ff5b1f";
         return (
           <Line
             key={i}
             points={[nodePos(a), nodePos(b)]}
-            color={isPred ? "#ffc15c" : "#ff5b1f"}
-            opacity={isPred ? 0.6 : 0.2}
+            color={color}
+            opacity={baseOpacity}
             transparent
-            lineWidth={isPred ? 2 : 1}
+            lineWidth={touchesSelected ? 2.2 : isPred ? 1.8 : 1}
           />
         );
       })}
@@ -170,10 +213,27 @@ function Scene({ selected, setSelected, predictedTargets, nodes: propNodes, edge
   const nodes = propNodes || NODES;
   const edges = propEdges || EDGES;
 
+  // Spread nodes uniformly when there are many of them
+  const radius = useMemo(() => {
+    const n = nodes.length;
+    if (n <= 12) return 8;
+    if (n <= 30) return 11;
+    if (n <= 60) return 14;
+    return 17;
+  }, [nodes.length]);
+
+  useMemo(() => {
+    computePositions(nodes, radius);
+  }, [nodes, radius]);
+
+  // Fog scales with cloud radius so deep nodes still fade naturally
+  const fogNear = radius * 1.4;
+  const fogFar = radius * 3.2;
+
   return (
     <>
       <color attach="background" args={["#040506"]} />
-      <fog attach="fog" args={["#040506", 18, 38]} />
+      <fog attach="fog" args={["#040506", fogNear, fogFar]} />
       <Stars radius={60} depth={60} count={3500} factor={5} fade speed={0.8} />
       {/* Distant nebula spheres */}
       <mesh position={[20, 8, -20]}>
@@ -188,7 +248,7 @@ function Scene({ selected, setSelected, predictedTargets, nodes: propNodes, edge
       <pointLight position={[10, 10, 10]} intensity={1.6} color="#ff5b1f" />
       <pointLight position={[-10, -10, -10]} intensity={0.9} color="#a87bff" />
       <pointLight position={[0, 0, 5]} intensity={0.6} color="#ffc15c" />
-      <Edges predictedTargets={predictedTargets} edges={edges} nodes={nodes} />
+      <Edges predictedTargets={predictedTargets} edges={edges} nodes={nodes} selectedId={selected} />
       {nodes.map((n) => (
         <NodeMesh
           key={n.id}
@@ -199,7 +259,7 @@ function Scene({ selected, setSelected, predictedTargets, nodes: propNodes, edge
           onClick={() => setSelected(n.id)}
         />
       ))}
-      <OrbitControls enablePan enableZoom enableRotate maxDistance={30} minDistance={3} />
+      <OrbitControls enablePan enableZoom enableRotate maxDistance={80} minDistance={4} autoRotate autoRotateSpeed={0.4} />
     </>
   );
 }
@@ -226,7 +286,7 @@ export function Map3D({ customNodes, customEdges }: Map3DProps = {}) {
 
   return (
     <div className="h-full relative">
-      <Canvas camera={{ position: [8, 4, 12], fov: 50 }}>
+      <Canvas camera={{ position: [18, 8, 26], fov: 55 }}>
         <Suspense fallback={null}>
           <Scene selected={selected} setSelected={setSelected} predictedTargets={predictedTargets} nodes={customNodes} edges={customEdges} />
         </Suspense>
