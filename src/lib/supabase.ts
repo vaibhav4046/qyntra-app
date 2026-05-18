@@ -38,3 +38,25 @@ export function supabaseBrowser(): SupabaseClient {
 export function hasSupabase(): boolean {
   return Boolean(url && (anon || serviceRole));
 }
+
+/**
+ * Ensure a profiles row exists for the given user id/email.
+ * Call this before any operation that references user_id via FK.
+ */
+export async function ensureProfile(userId: string, email?: string | null, name?: string | null) {
+  if (!hasSupabase() || !userId) return;
+  try {
+    const sb = supabaseAdmin();
+    const { data } = await sb.from("profiles").select("id").eq("id", userId).maybeSingle();
+    if (!data) {
+      await sb.from("profiles").insert({
+        id: userId,
+        email: email || null,
+        name: name || null,
+        provider: userId.split(":")[0] || "unknown",
+      });
+    }
+  } catch {
+    // Non-fatal: FK might already exist or table missing
+  }
+}

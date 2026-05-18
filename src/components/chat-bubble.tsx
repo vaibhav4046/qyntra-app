@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, X, Send, Sparkles, Loader2, BrainCircuit, AlertCircle } from "lucide-react";
+import { MessageSquare, X, Send, Sparkles, Loader2, BrainCircuit, AlertCircle, ChevronDown } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
 import { Logo } from "./logo";
 
@@ -24,11 +24,27 @@ export function ChatBubble() {
   const [tokenInfo, setTokenInfo] = useState<{ input: number; output: number } | null>(null);
   const [corpusInfo, setCorpusInfo] = useState<{ files: number; chars: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isFollowingRef = useRef(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const { demoMode } = useProfileStore();
 
+  // Auto-scroll only if user is following (near bottom)
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el || !isFollowingRef.current) return;
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
   }, [messages]);
+
+  // Track scroll position to toggle follow lock
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    isFollowingRef.current = nearBottom;
+    setShowScrollBtn(!nearBottom && messages.length > 0);
+  }, [messages.length]);
 
   const updateTokenInfo = useCallback((inputTokens: number, outputTokens: number) => {
     setTokenInfo({ input: inputTokens, output: outputTokens });
@@ -140,7 +156,7 @@ export function ChatBubble() {
             )}
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4" style={{ overscrollBehavior: "contain" }}>
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 relative" style={{ overscrollBehavior: "contain" }}>
               {messages.length === 0 && (
                 <div className="text-center py-10">
                   <div className="mono cap text-[10px] text-[var(--muted)] mb-3">SUGGESTED</div>
@@ -182,6 +198,23 @@ export function ChatBubble() {
                     {error}
                   </div>
                 </div>
+              )}
+
+              {/* Scroll-to-bottom button */}
+              {showScrollBtn && (
+                <button
+                  onClick={() => {
+                    const el = scrollRef.current;
+                    if (el) {
+                      isFollowingRef.current = true;
+                      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+                      setShowScrollBtn(false);
+                    }
+                  }}
+                  className="sticky bottom-2 left-1/2 -translate-x-1/2 w-fit px-3 py-1 rounded-full bg-[var(--bg-2)] border border-[var(--line)] text-[var(--text-2)] text-[11px] flex items-center gap-1 shadow-lg hover:bg-[var(--bg)] transition z-10"
+                >
+                  <ChevronDown size={12} /> New message
+                </button>
               )}
             </div>
 

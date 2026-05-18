@@ -44,6 +44,7 @@ export default function AskPage() {
   const [corpusInfo, setCorpusInfo] = useState<{ files: number; chars: number } | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isFollowingRef = useRef(true);
   const { demoMode, init: initProfile } = useProfileStore();
   const {
     conversations,
@@ -140,28 +141,29 @@ export default function AskPage() {
   );
   const messages = active?.messages || [];
 
-  // Auto-scroll on new messages unless user scrolled up
+  // Auto-scroll on new messages only if user is following (near bottom)
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-    if (nearBottom) {
+    if (!el || !isFollowingRef.current) return;
+    requestAnimationFrame(() => {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    }
+    });
   }, [messages]);
 
   function onScroll() {
     const el = scrollRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distFromBottom < 120;
+    isFollowingRef.current = nearBottom;
     setShowScrollDown(distFromBottom > 300);
   }
 
   function scrollToBottom() {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
+    const el = scrollRef.current;
+    if (!el) return;
+    isFollowingRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }
 
   async function send() {

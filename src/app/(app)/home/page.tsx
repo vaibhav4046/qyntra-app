@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { ConnIcon } from "@/components/conn-icon";
 import { CONNECTORS, ACTIVITY } from "@/lib/data";
 import { ChatBubble } from "@/components/chat-bubble";
-import { Search, ArrowRight, Sparkles, Beaker, Zap, Filter } from "lucide-react";
+import { Search, ArrowRight, Sparkles, Beaker, Zap, Filter, Loader2 } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
 
 const demoStats = [
@@ -50,6 +50,8 @@ export default function HomePage() {
   const [activityFilter, setActivityFilter] = useState<"all" | "claims" | "entities" | "imports">("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+  const [realStats, setRealStats] = useState({ pages: 0, sources: 0, entities: 0, claims: 0 });
+  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => { init(); }, [init]);
   useEffect(() => {
@@ -58,7 +60,46 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  const stats = demoMode ? demoStats : emptyStats;
+  // Fetch real stats
+  const loadStats = useCallback(async () => {
+    if (demoMode) return;
+    setStatsLoading(true);
+    try {
+      const res = await fetch("/api/files");
+      if (res.ok) {
+        const json = await res.json();
+        const files = json.files || [];
+        const pages = files.filter((f: any) => f.kind === "PAGE" || f.kind === "DOC").length;
+        const sources = new Set(files.map((f: any) => f.source)).size;
+        const entities = files.filter((f: any) => f.kind === "ENTITY" || f.kind === "CLAIM").length;
+        setRealStats({
+          pages: pages || files.length,
+          sources: sources || 0,
+          entities: entities || 0,
+          claims: files.filter((f: any) => f.kind === "CLAIM").length,
+        });
+      }
+    } catch {}
+    setStatsLoading(false);
+  }, [demoMode]);
+
+  useEffect(() => {
+    loadStats();
+    // Poll every 30s
+    const id = setInterval(loadStats, 30_000);
+    return () => clearInterval(id);
+  }, [loadStats]);
+
+  const liveStats = !demoMode && realStats.pages > 0
+    ? [
+        { k: "PAGES", v: String(realStats.pages), d: "Ingested files", c: "var(--ember)", href: "/read" },
+        { k: "SOURCES", v: String(realStats.sources), d: "Connected apps", c: "var(--gold)", href: "/sources" },
+        { k: "ENTITIES", v: String(realStats.entities), d: "Extracted entities", c: "var(--violet)", href: "/map-3d" },
+        { k: "CLAIMS", v: String(realStats.claims), d: "Verified claims", c: "var(--teal)", href: "/read" },
+      ]
+    : null;
+
+  const stats = demoMode ? demoStats : (liveStats || emptyStats);
   const connectors = demoMode ? CONNECTORS : CONNECTORS.map((c) => ({ ...c, on: false, count: 0 }));
   const activity = demoMode ? ACTIVITY : [];
 
@@ -124,7 +165,11 @@ export default function HomePage() {
           <div className="mono cap text-[11px] text-[var(--muted)] mt-1">
             {demoMode
               ? "Your wiki · 9 pages · 142 sources · last compile 2m ago"
-              : "Empty workspace · connect sources to start"}
+              : statsLoading
+                ? "Loading workspace stats…"
+                : realStats.pages > 0
+                  ? `Your wiki · ${realStats.pages} files · ${realStats.sources} sources · live`
+                  : "Empty workspace · connect sources to start"}
           </div>
         </div>
         <div className="flex gap-2">
@@ -152,21 +197,23 @@ export default function HomePage() {
               <Sparkles size={12} /> Your memory · Living document
             </div>
             <h2 className="text-[22px] sm:text-[28px] font-semibold tracking-tight max-w-[640px] leading-tight">
-              {demoMode ? "23 new claims grew on your tree today." : "Plant your first source."}
+              {demoMode ? "23 new claims grew on your tree today." : realStats.pages > 0 ? `${realStats.pages} files indexed across ${realStats.sources} sources.` : "Plant your first source."}
             </h2>
             <p className="text-[14px] sm:text-[15px] text-[var(--text-2)] mt-2 max-w-[560px]">
-              {demoMode
-                ? "Walk the connections in the 3D Galaxy. Click any entity for details."
-                : "Head to /sources to connect Notion, Drive, Gmail, GitHub, or Desktop. Each source populates your wiki after consent."}
+                {demoMode
+                  ? "Walk the connections in the 3D Galaxy. Click any entity for details."
+                  : realStats.pages > 0
+                    ? "Your knowledge is live. Explore it in the 3D Galaxy or ask questions."
+                    : "Head to /sources to connect Notion, Drive, Gmail, GitHub, or Desktop. Each source populates your wiki after consent."}
             </p>
             <span className="mono cap text-[10px] text-[var(--ember)] mt-3 inline-flex items-center gap-1">
               Open the map <ArrowRight size={11} />
             </span>
           </div>
           <div className="flex gap-3 mono cap text-[10px]">
-            <div className="px-3 py-2 rounded border border-[var(--line)]"><span className="text-[var(--muted)]">DEPTH</span> <strong>{demoMode ? 7 : 0}</strong></div>
-            <div className="px-3 py-2 rounded border border-[var(--line)]"><span className="text-[var(--muted)]">BRANCHES</span> <strong>{demoMode ? 34 : 0}</strong></div>
-            <div className="px-3 py-2 rounded border border-[var(--line)]"><span className="text-[var(--muted)]">LEAVES</span> <strong>{demoMode ? 219 : 0}</strong></div>
+            <div className="px-3 py-2 rounded border border-[var(--line)]"><span className="text-[var(--muted)]">FILES</span> <strong>{demoMode ? 9 : realStats.pages}</strong></div>
+            <div className="px-3 py-2 rounded border border-[var(--line)]"><span className="text-[var(--muted)]">SOURCES</span> <strong>{demoMode ? 5 : realStats.sources}</strong></div>
+            <div className="px-3 py-2 rounded border border-[var(--line)]"><span className="text-[var(--muted)]">CLAIMS</span> <strong>{demoMode ? 23 : realStats.claims}</strong></div>
           </div>
         </div>
       </motion.button>

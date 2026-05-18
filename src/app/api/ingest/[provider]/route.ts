@@ -5,7 +5,7 @@ import {
   getSessionAccessTokenForIngest,
   REMOVED_INGEST_PROVIDERS,
 } from "@/lib/session-ingest";
-import { hasSupabase } from "@/lib/supabase";
+import { hasSupabase, ensureProfile } from "@/lib/supabase";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ provider: string }> }) {
   const { provider } = await params;
@@ -25,6 +25,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ provid
   if (!session?.user?.id) {
     return Response.json({ error: "Unauthenticated" }, { status: 401 });
   }
+
+  // CRITICAL: Ensure profile exists before inserting files (FK constraint)
+  await ensureProfile(session.user.id, session.user.email, session.user.name);
 
   try {
     const accessToken = await getSessionAccessTokenForIngest(session, provider);
