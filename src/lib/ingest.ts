@@ -73,6 +73,47 @@ interface NotionPage {
   last_edited_time: string;
 }
 
+interface NotionRichText {
+  plain_text?: string;
+}
+interface NotionBlock {
+  type: string;
+  [k: string]: unknown;
+}
+
+function extractBlockText(block: NotionBlock): string {
+  // Each Notion block has a payload keyed by its type, containing rich_text array
+  const payload = (block as Record<string, unknown>)[block.type] as
+    | { rich_text?: NotionRichText[] }
+    | undefined;
+  if (!payload?.rich_text) return "";
+  return payload.rich_text.map((rt) => rt.plain_text || "").join("");
+}
+
+async function fetchNotionPageContent(token: string, pageId: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://api.notion.com/v1/blocks/${pageId}/children?page_size=50`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Notion-Version": "2022-06-28",
+        },
+      }
+    );
+    if (!res.ok) return "";
+    const data = await res.json();
+    const blocks: NotionBlock[] = data.results || [];
+    return blocks
+      .map((b) => extractBlockText(b))
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 8000); // cap per-page to 8KB
+  } catch {
+    return "";
+  }
+}
+
 export async function fetchNotionPages(token: string, userId: string): Promise<IngestRow[]> {
   const res = await fetch("https://api.notion.com/v1/search", {
     method: "POST",
@@ -86,19 +127,36 @@ export async function fetchNotionPages(token: string, userId: string): Promise<I
   if (!res.ok) throw new Error(`Notion API ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const pages: NotionPage[] = data.results || [];
-  return pages.map((p) => ({
-    user_id: userId,
-    source: "notion",
-    source_id: p.id,
-    source_url: p.url,
-    kind: "PAGE",
-    title:
-      p.properties?.title?.title?.[0]?.plain_text ||
-      p.properties?.Name?.title?.[0]?.plain_text ||
-      "Untitled",
-    last_modified: p.last_edited_time,
-    tags: ["notion"],
-  }));
+
+  // Fetch content for each page in parallel (capped concurrency via small batches)
+  const rows: IngestRow[] = [];
+  const batchSize = 5;
+  for (let i = 0; i < pages.length; i += batchSize) {
+    const batch = pages.slice(i, i + batchSize);
+    const enriched = await Promise.all(
+      batch.map(async (p) => {
+        const content = await fetchNotionPageContent(token, p.id);
+        const title =
+          p.properties?.title?.title?.[0]?.plain_text ||
+          p.properties?.Name?.title?.[0]?.plain_text ||
+          "Untitled";
+        return {
+          user_id: userId,
+          source: "notion",
+          source_id: p.id,
+          source_url: p.url,
+          kind: "PAGE",
+          title,
+          summary: content.slice(0, 240) || undefined,
+          content: content || undefined,
+          last_modified: p.last_edited_time,
+          tags: ["notion"],
+        } as IngestRow;
+      })
+    );
+    rows.push(...enriched);
+  }
+  return rows;
 }
 
 interface DriveFile {
