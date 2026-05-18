@@ -333,7 +333,11 @@ export default function AskPage() {
           ref={scrollRef}
           onScroll={onScroll}
           className="flex-1 overflow-y-auto px-6 sm:px-10 py-8 space-y-6"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "#333 transparent" }}
+          style={{
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(255,91,31,0.5) transparent",
+            overscrollBehavior: "contain",
+          }}
         >
           {messages.length === 0 && (
             <div className="max-w-[640px] mx-auto text-center py-12">

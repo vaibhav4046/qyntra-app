@@ -110,10 +110,13 @@ export async function POST(req: Request) {
     .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
     .slice(-20);
 
-  // Load user corpus from Supabase if not demo
+  // Load user corpus from Supabase. Real files ALWAYS win over demoMode flag —
+  // if user ingested anything, ground on it. demoMode only matters when corpus empty.
   const userId = (session.user as { id?: string }).id;
-  const { files: userFiles, totalContentChars } = !demoMode && userId ? await loadUserCorpus(userId) : { files: [], totalContentChars: 0 };
-  const { prompt: systemPrompt, corpusTokens } = buildSystemPrompt(userFiles, demoMode);
+  const corpus = userId ? await loadUserCorpus(userId) : { files: [], totalContentChars: 0 };
+  const { files: userFiles, totalContentChars } = corpus;
+  const effectiveDemoMode = demoMode && userFiles.length === 0;
+  const { prompt: systemPrompt, corpusTokens } = buildSystemPrompt(userFiles, effectiveDemoMode);
 
   const conversationText = sanitized.map((m: { content: string }) => m.content).join(" ");
   const conversationTokens = estimateTokens(conversationText);
