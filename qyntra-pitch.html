@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qyntra — Pitch Deck</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a0a;
+      --bg-1: #111;
+      --line: #1a1a1a;
+      --ember: #f59e42;
+      --gold: #ffc15c;
+      --text: #e8e6e3;
+      --text-2: #a0a0a0;
+      --muted: #666;
+      --good: #7ee787;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .slide {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 60px 80px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      text-align: center;
+    }
+    .slide.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .slide-number {
+      position: absolute;
+      bottom: 30px;
+      right: 40px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 2px;
+    }
+    .nav-hint {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 72px;
+      font-weight: 700;
+      letter-spacing: -2px;
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+    h2 {
+      font-size: 48px;
+      font-weight: 600;
+      letter-spacing: -1px;
+      margin-bottom: 40px;
+      line-height: 1.2;
+    }
+    h3 {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--ember);
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    p {
+      font-size: 22px;
+      line-height: 1.6;
+      color: var(--text-2);
+      max-width: 700px;
+    }
+    .big-link {
+      display: inline-block;
+      margin-top: 40px;
+      padding: 14px 32px;
+      background: var(--ember);
+      color: #000;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+      letter-spacing: 0.5px;
+    }
+    .big-link:hover { background: var(--gold); }
+    .tagline {
+      font-size: 26px;
+      color: var(--text-2);
+      margin-bottom: 40px;
+    }
+    .emoji { font-size: 64px; margin-bottom: 24px; }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+      max-width: 900px;
+      margin-top: 40px;
+      text-align: left;
+    }
+    .feature {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-1);
+    }
+    .feature h4 {
+      font-size: 16px;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .feature p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .stack {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 32px;
+      max-width: 700px;
+    }
+    .stack span {
+      padding: 8px 16px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-2);
+      background: var(--bg-1);
+    }
+    .highlight { color: var(--ember); }
+    .good { color: var(--good); }
+    .gold { color: var(--gold); }
+    ul.clean {
+      list-style: none;
+      text-align: left;
+      max-width: 600px;
+      margin-top: 24px;
+    }
+    ul.clean li {
+      font-size: 20px;
+      color: var(--text-2);
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    ul.clean li:last-child { border-bottom: none; }
+    .qr-placeholder {
+      width: 160px;
+      height: 160px;
+      border: 2px dashed var(--line);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 24px auto;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 768px) {
+      h1 { font-size: 42px; }
+      h2 { font-size: 32px; }
+      p { font-size: 18px; }
+      .slide { padding: 40px 24px; }
+      .features { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+
+    <!-- Slide 1: Title -->
+    <div class="slide active">
+      <div style="font-size: 14px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 24px;">Hackathon Project</div>
+      <h1>Qyntra</h1>
+      <div class="tagline">The stuff you saved, actually remembered.</div>
+      <a href="https://qyntra-app.vercel.app/" target="_blank" class="big-link">qyntra-app.vercel.app</a>
+      <div class="slide-number">01 / 08</div>
+      <div class="nav-hint">Press arrow keys or click to navigate</div>
+    </div>
+
+    <!-- Slide 2: The Problem -->
+    <div class="slide">
+      <h3>The Problem</h3>
+      <h2>You save everything.<br>You remember nothing.</h2>
+      <ul class="clean">
+        <li>📁 Drive folders you haven't opened in months</li>
+        <li>⭐ GitHub repos you starred and forgot</li>
+        <li>📝 Notion pages buried three levels deep</li>
+        <li>📧 Important emails lost in your inbox</li>
+      </ul>
+      <p style="margin-top: 32px;">The information is there. Just scattered, disconnected, and impossible to search across.</p>
+      <div class="slide-number">02 / 08</div>
+    </div>
+
+    <!-- Slide 3: The Solution -->
+    <div class="slide">
+      <h3>The Solution</h3>
+      <h2>One place for <span class="highlight">your</span> knowledge.</h2>
+      <p>Qyntra pulls from Google Drive, Gmail, GitHub, Notion — even your desktop — and turns it all into a private, searchable wiki you can actually talk to.</p>
+      <div class="features" style="grid-template-columns: repeat(2, 1fr); max-width: 700px;">
+        <div class="feature">
+          <h4>Ingest Everything</h4>
+          <p>Connect sources once. Files, emails, repos, and pages flow in automatically.</p>
+        </div>
+        <div class="feature">
+          <h4>Ask in Plain English</h4>
+          <p>"What did I write about GraphRAG?" — it reads your files, not the internet.</p>
+        </div>
+        <div class="feature">
+          <h4>Private by Default</h4>
+          <p>Your data stays yours. No shared workspaces. No team noise. Just you.</p>
+        </div>
+        <div class="feature">
+          <h4>Desktop Too</h4>
+          <p>Pick a local folder and it scans every supported file recursively.</p>
+        </div>
+      </div>
+      <div class="slide-number">03 / 08</div>
+    </div>
+
+    <!-- Slide 4: Features -->
+    <div class="slide">
+      <h3>What It Does</h3>
+      <div class="features" style="margin-top: 20px;">
+        <div class="feature">
+          <h4 class="gold">Files</h4>
+          <p>Grid and list views of all ingested files. Search by title, source, or tag. Real-time sync status.</p>
+        </div>
+        <div class="feature">
+          <h4 class="gold">Ask</h4>
+          <p>Chat grounded on your corpus. Token counters, citation extraction, corpus stats sidebar.</p>
+        </div>
+        <div class="feature">
+          <h4 class="gold">Read</h4>
+          <p>Full-text viewer for any file. Metadata, tags, source links. No download needed.</p>
+        </div>
+        <div class="feature">
+          <h4 class="gold">3D Galaxy</h4>
+          <p>Interactive knowledge graph. Real files as nodes. Click to explore connections.</p>
+        </div>
+        <div class="feature">
+          <h4 class="gold">Sources</h4>
+          <p>One-click OAuth for Drive, Gmail, GitHub, Notion. Toggle on/off per source.</p>
+        </div>
+        <div class="feature">
+          <h4 class="gold">Dashboard</h4>
+          <p>Live stats, recent activity, connector health. See what's happening at a glance.</p>
+        </div>
+      </div>
+      <div class="slide-number">04 / 08</div>
+    </div>
+
+    <!-- Slide 5: Tech Stack -->
+    <div class="slide">
+      <h3>Built With</h3>
+      <h2>Modern. Fast. AI-Native.</h2>
+      <div class="stack">
+        <span>Next.js 16</span>
+        <span>React 19</span>
+        <span>TypeScript</span>
+        <span>Tailwind CSS</span>
+        <span>Auth.js</span>
+        <span>Supabase</span>
+        <span>Groq</span>
+        <span>Llama 3.3 70B</span>
+        <span>Three.js</span>
+        <span>Framer Motion</span>
+        <span>Vercel</span>
+        <span>Zustand</span>
+      </div>
+      <p style="margin-top: 40px;">Coded with <span class="highlight">Claude Code</span>, <span class="highlight">OpenCode</span>, and <span class="highlight">Jules</span> as pair programmers. Gemini used for architecture planning.</p>
+      <div class="slide-number">05 / 08</div>
+    </div>
+
+    <!-- Slide 6: How It Works -->
+    <div class="slide">
+      <h3>The Flow</h3>
+      <h2>Three steps to your wiki.</h2>
+      <div style="display: flex; gap: 32px; justify-content: center; margin-top: 40px; flex-wrap: wrap; max-width: 900px;">
+        <div style="text-align: center; max-width: 240px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">1</div>
+          <h4 style="font-size: 18px; margin-bottom: 8px;">Sign In</h4>
+          <p style="font-size: 15px;">Email magic link. No passwords. No OAuth hassles.</p>
+        </div>
+        <div style="text-align: center; max-width: 240px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">2</div>
+          <h4 style="font-size: 18px; margin-bottom: 8px;">Connect</h4>
+          <p style="font-size: 15px;">Pick sources — Drive, GitHub, Notion, or a local folder. One-time setup.</p>
+        </div>
+        <div style="text-align: center; max-width: 240px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">3</div>
+          <h4 style="font-size: 18px; margin-bottom: 8px;">Ask</h4>
+          <p style="font-size: 15px;">Chat with your knowledge. Cited answers from your real files.</p>
+        </div>
+      </div>
+      <div class="slide-number">06 / 08</div>
+    </div>
+
+    <!-- Slide 7: Live Demo -->
+    <div class="slide">
+      <h3>See It Live</h3>
+      <h2>Try the demo. No sign-up required.</h2>
+      <p>Or sign in with your email and connect real sources. Desktop ingestion works in any browser — just pick a folder.</p>
+      <div style="margin-top: 40px; padding: 24px 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-1);">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: var(--ember); letter-spacing: 1px;">
+          qyntra-app.vercel.app
+        </div>
+        <div style="font-size: 14px; color: var(--muted); margin-top: 8px;">
+          Click to open in new tab
+        </div>
+      </div>
+      <a href="https://qyntra-app.vercel.app/" target="_blank" class="big-link" style="margin-top: 32px;">Open Qyntra</a>
+      <div class="slide-number">07 / 08</div>
+    </div>
+
+    <!-- Slide 8: Thank You -->
+    <div class="slide">
+      <h1 style="font-size: 64px;">Thank You</h1>
+      <p style="margin-top: 16px; margin-bottom: 40px;">Built in one day. AI-powered. Human-first.</p>
+      <a href="https://qyntra-app.vercel.app/" target="_blank" class="big-link">qyntra-app.vercel.app</a>
+      <div style="margin-top: 40px; font-size: 14px; color: var(--muted);">
+        Questions? Try the live app and ask Qyntra yourself.
+      </div>
+      <div class="slide-number">08 / 08</div>
+    </div>
+
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    let current = 0;
+
+    function showSlide(index) {
+      slides.forEach((s, i) => s.classList.toggle('active', i === index));
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+        e.preventDefault();
+        current = Math.min(current + 1, slides.length - 1);
+        showSlide(current);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        current = Math.max(current - 1, 0);
+        showSlide(current);
+      } else if (e.key === 'Home') {
+        current = 0;
+        showSlide(current);
+      } else if (e.key === 'End') {
+        current = slides.length - 1;
+        showSlide(current);
+      }
+    });
+
+    document.addEventListener('click', () => {
+      current = Math.min(current + 1, slides.length - 1);
+      showSlide(current);
+    });
+  </script>
+</body>
+</html>
