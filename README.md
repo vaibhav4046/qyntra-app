@@ -8,6 +8,18 @@
 
 ---
 
+## Screenshots
+
+| Surface | Preview |
+|---|---|
+| Landing | ![Landing](./screenshots/landing.png) |
+| Sign in (passwordless magic link) | ![Sign in](./screenshots/signin.png) |
+| Onboarding | ![Onboarding](./screenshots/onboarding.png) |
+
+Live captures of `/home`, `/wiki`, `/map-3d`, `/ask`, `/read`, `/files`, `/sources` are best viewed on the deployed app — they require an authenticated session.
+
+---
+
 ## What It Is
 
 Qyntra turns scattered knowledge across Notion, Drive, Gmail, GitHub and your desktop into a single living wiki — your own private Wikipedia. Auto-generated entity pages with cited claims, a 3D galaxy you can navigate, hybrid (memory + web) chat grounded on your real corpus, and predictive next-page navigation that surfaces forgotten knowledge.

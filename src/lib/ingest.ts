@@ -108,7 +108,7 @@ async function fetchNotionPageContent(token: string, pageId: string): Promise<st
       .map((b) => extractBlockText(b))
       .filter(Boolean)
       .join("\n")
-      .slice(0, 8000); // cap per-page to 8KB
+      .slice(0, 16000); // cap per-page to 16KB
   } catch {
     return "";
   }
@@ -167,6 +167,27 @@ interface DriveFile {
   webViewLink?: string;
 }
 
+async function fetchDriveDocText(token: string, fileId: string, mimeType: string): Promise<string> {
+  try {
+    // Only Google Docs / Sheets / Slides export to text. Skip PDFs and binary.
+    if (!mimeType.startsWith("application/vnd.google-apps")) return "";
+    const exportMime = mimeType.includes("spreadsheet")
+      ? "text/csv"
+      : mimeType.includes("presentation")
+      ? "text/plain"
+      : "text/plain";
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportMime)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) return "";
+    const text = await res.text();
+    return text.slice(0, 16000);
+  } catch {
+    return "";
+  }
+}
+
 export async function fetchDriveFiles(token: string, userId: string): Promise<IngestRow[]> {
   const res = await fetch(
     "https://www.googleapis.com/drive/v3/files?pageSize=50&fields=files(id,name,mimeType,modifiedTime,webViewLink)",
@@ -175,22 +196,41 @@ export async function fetchDriveFiles(token: string, userId: string): Promise<In
   if (!res.ok) throw new Error(`Drive API ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const files: DriveFile[] = data.files || [];
-  return files.map((f) => ({
-    user_id: userId,
-    source: "drive",
-    source_id: f.id,
-    source_url: f.webViewLink,
-    kind: f.mimeType.includes("spreadsheet")
-      ? "SHEET"
-      : f.mimeType.includes("presentation")
-      ? "SLIDES"
-      : f.mimeType.includes("pdf")
-      ? "PDF"
-      : "DOC",
-    title: f.name,
-    last_modified: f.modifiedTime,
-    tags: ["drive"],
-  }));
+
+  // Fetch content for top 20 Google Docs / Sheets / Slides in parallel batches
+  const contents = new Map<string, string>();
+  const exportable = files.filter((f) => f.mimeType.startsWith("application/vnd.google-apps")).slice(0, 20);
+  for (let i = 0; i < exportable.length; i += 5) {
+    const batch = exportable.slice(i, i + 5);
+    const results = await Promise.all(
+      batch.map(async (f) => ({ id: f.id, content: await fetchDriveDocText(token, f.id, f.mimeType) }))
+    );
+    for (const { id, content } of results) {
+      if (content) contents.set(id, content);
+    }
+  }
+
+  return files.map((f) => {
+    const content = contents.get(f.id) || "";
+    return {
+      user_id: userId,
+      source: "drive",
+      source_id: f.id,
+      source_url: f.webViewLink,
+      kind: f.mimeType.includes("spreadsheet")
+        ? "SHEET"
+        : f.mimeType.includes("presentation")
+        ? "SLIDES"
+        : f.mimeType.includes("pdf")
+        ? "PDF"
+        : "DOC",
+      title: f.name,
+      summary: content.slice(0, 240) || undefined,
+      content: content || undefined,
+      last_modified: f.modifiedTime,
+      tags: ["drive"],
+    };
+  });
 }
 
 interface GmailMsg {
@@ -295,7 +335,7 @@ async function fetchRepoReadme(token: string, fullName: string): Promise<string>
     });
     if (!res.ok) return "";
     const text = await res.text();
-    return text.slice(0, 8000); // cap per-repo
+    return text.slice(0, 16000); // cap per-repo
   } catch {
     return "";
   }
