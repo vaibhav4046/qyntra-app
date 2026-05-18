@@ -16,13 +16,20 @@ declare module "next-auth" {
   }
 }
 
+// Prevent Next.js from inlining env vars at build time.
+// We read them at runtime so redeploys pick up new OAuth credentials
+// without requiring a clean build.
+function env(key: string): string | undefined {
+  return process.env[key];
+}
+
 const providers = [];
 
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+if (env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET")) {
   providers.push(
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: env("GOOGLE_CLIENT_ID")!,
+      clientSecret: env("GOOGLE_CLIENT_SECRET")!,
       authorization: {
         params: {
           scope:
@@ -35,11 +42,11 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
+if (env("GITHUB_ID") && env("GITHUB_SECRET")) {
   providers.push(
     GitHub({
-      clientId: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET,
+      clientId: env("GITHUB_ID")!,
+      clientSecret: env("GITHUB_SECRET")!,
       authorization: {
         params: {
           scope: "read:user user:email repo gist read:org",
@@ -49,14 +56,14 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
   );
 }
 
-if (process.env.NOTION_CLIENT_ID && process.env.NOTION_CLIENT_SECRET) {
+if (env("NOTION_CLIENT_ID") && env("NOTION_CLIENT_SECRET")) {
   providers.push(
     Notion({
-      clientId: process.env.NOTION_CLIENT_ID,
-      clientSecret: process.env.NOTION_CLIENT_SECRET,
+      clientId: env("NOTION_CLIENT_ID")!,
+      clientSecret: env("NOTION_CLIENT_SECRET")!,
       redirectUri:
-        process.env.NOTION_REDIRECT_URI ||
-        `${process.env.NEXTAUTH_URL || "https://qyntra-app.vercel.app"}/api/auth/callback/notion`,
+        env("NOTION_REDIRECT_URI") ||
+        `${env("NEXTAUTH_URL") || "https://qyntra-app.vercel.app"}/api/auth/callback/notion`,
     })
   );
 }
