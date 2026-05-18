@@ -23,10 +23,21 @@ export default function SourcesPage() {
   const { demoMode } = useProfileStore();
   const { connectors: conns, syncing, init, toggle } = useConnectorStore();
   const [syncs, setSyncs] = useState<Record<string, SyncState>>({});
+  const [realFileCount, setRealFileCount] = useState(0);
 
   useEffect(() => {
     init();
   }, [init]);
+
+  // Real files always win: if user has any ingested data, suppress the demo banner
+  useEffect(() => {
+    fetch("/api/files?limit=1")
+      .then((r) => r.json())
+      .then((j) => setRealFileCount((j.files || []).length))
+      .catch(() => {});
+  }, []);
+
+  const effectiveDemo = demoMode && realFileCount === 0;
 
   function connectReal(c: QConnector) {
     const providerId = c.provider;
@@ -100,7 +111,7 @@ export default function SourcesPage() {
         </p>
       </div>
 
-      {demoMode && (
+      {effectiveDemo && (
         <div className="mb-6 p-3 rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/5 flex items-start gap-3">
           <AlertCircle size={16} className="text-[var(--gold)] mt-0.5 flex-shrink-0" />
           <div className="flex-1 text-[13px] text-[var(--text-2)] leading-relaxed">
@@ -128,7 +139,7 @@ export default function SourcesPage() {
                   <div>
                     <h3 className="text-[17px] font-semibold">{c.name}</h3>
                     {(() => {
-                      const isDemo = demoMode && c.on;
+                      const isDemo = effectiveDemo && c.on;
                       const label = syncing[c.id]
                         ? "SYNCING..."
                         : isDemo
@@ -162,8 +173,8 @@ export default function SourcesPage() {
                       </button>
                       <button
                         onClick={() => syncNow(c)}
-                        disabled={sync?.loading || demoMode}
-                        title={demoMode ? "Turn demo mode off to sync real data" : "Sync now"}
+                        disabled={sync?.loading || effectiveDemo}
+                        title={effectiveDemo ? "Turn demo mode off to sync real data" : "Sync now"}
                         className="mono cap text-[10px] px-3 py-1.5 rounded border border-[var(--gold)]/40 text-[var(--gold)] hover:bg-[var(--gold)]/10 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RefreshCw size={11} className={sync?.loading ? "animate-spin" : ""} />

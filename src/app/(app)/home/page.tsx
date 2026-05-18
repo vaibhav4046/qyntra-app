@@ -60,9 +60,8 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  // Fetch real stats
+  // Fetch real stats — always try, real corpus wins over demoMode flag
   const loadStats = useCallback(async () => {
-    if (demoMode) return;
     setStatsLoading(true);
     try {
       const res = await fetch("/api/files");
@@ -90,7 +89,8 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, [loadStats]);
 
-  const liveStats = !demoMode && realStats.pages > 0
+  // Real files always win: if user has any ingested data, show it (ignore demoMode flag)
+  const liveStats = realStats.pages > 0
     ? [
         { k: "PAGES", v: String(realStats.pages), d: "Ingested files", c: "var(--ember)", href: "/read" },
         { k: "SOURCES", v: String(realStats.sources), d: "Connected apps", c: "var(--gold)", href: "/sources" },
@@ -99,8 +99,13 @@ export default function HomePage() {
       ]
     : null;
 
-  const stats = demoMode ? demoStats : (liveStats || emptyStats);
-  const connectors = demoMode ? CONNECTORS : CONNECTORS.map((c) => ({ ...c, on: false, count: 0 }));
+  // Stats priority: real data > demo > empty
+  const stats = liveStats || (demoMode ? demoStats : emptyStats);
+  const connectors = liveStats
+    ? CONNECTORS.map((c) => ({ ...c, on: realStats.pages > 0 && (c.id === "github" || c.id === "notion") }))
+    : demoMode
+    ? CONNECTORS
+    : CONNECTORS.map((c) => ({ ...c, on: false, count: 0 }));
   const activity = demoMode ? ACTIVITY : [];
 
   const userName = useMemo(
