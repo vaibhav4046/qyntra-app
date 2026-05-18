@@ -44,7 +44,7 @@ export default function ReadPage() {
   }, [init]);
 
   const loadFiles = useCallback(async () => {
-    if (demoMode) return;
+    // Real files always win over demoMode flag
     setLoading(true);
     setError(null);
     try {
