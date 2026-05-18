@@ -18,9 +18,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
         <script
-          // Avoid flash of unstyled theme. Read once before paint.
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('qyntra:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}`,
+            __html: `try{document.documentElement.setAttribute('data-theme','dark');localStorage.setItem('qyntra:theme','dark');}catch(e){}`,
           }}
         />
       </head>

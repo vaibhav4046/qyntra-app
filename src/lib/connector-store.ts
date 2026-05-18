@@ -38,18 +38,5 @@ export const useConnectorStore = create<ConnectorStore>((set, get) => ({
     const next = get().connectors.map((x) => (x.id === c.id ? { ...x, on: !x.on } : x));
     set({ connectors: next });
     persistToLS(next);
-    if (!c.on) {
-      set((s) => ({ syncing: { ...s.syncing, [c.id]: true } }));
-      setTimeout(() => {
-        const bump = Math.floor(Math.random() * 18) + 3;
-        set((s) => {
-          const m = s.connectors.map((x) => (x.id === c.id ? { ...x, count: x.count + bump } : x));
-          persistToLS(m);
-          const ns = { ...s.syncing };
-          delete ns[c.id];
-          return { connectors: m, syncing: ns };
-        });
-      }, 1400);
-    }
   },
 }));

@@ -54,7 +54,9 @@ if (process.env.NOTION_CLIENT_ID && process.env.NOTION_CLIENT_SECRET) {
     Notion({
       clientId: process.env.NOTION_CLIENT_ID,
       clientSecret: process.env.NOTION_CLIENT_SECRET,
-      redirectUri: process.env.NOTION_REDIRECT_URI || "",
+      redirectUri:
+        process.env.NOTION_REDIRECT_URI ||
+        `${process.env.NEXTAUTH_URL || "https://qyntra-app.vercel.app"}/api/auth/callback/notion`,
     })
   );
 }
@@ -146,7 +148,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async redirect({ url, baseUrl }) {
       if (url.startsWith("/")) return `${baseUrl}${url}`;
-      if (new URL(url).origin === baseUrl) return url;
+      try {
+        if (new URL(url).origin === baseUrl) return url;
+      } catch {
+        // malformed URL → fall through to safe default
+      }
       return `${baseUrl}/onboarding`;
     },
   },

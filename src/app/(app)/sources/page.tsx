@@ -79,6 +79,15 @@ export default function SourcesPage() {
         </p>
       </div>
 
+      {demoMode && (
+        <div className="mb-6 p-3 rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/5 flex items-start gap-3">
+          <AlertCircle size={16} className="text-[var(--gold)] mt-0.5 flex-shrink-0" />
+          <div className="flex-1 text-[13px] text-[var(--text-2)] leading-relaxed">
+            <strong className="text-[var(--gold)]">Demo mode is ON.</strong> Connector data shown below is sample data — toggle this off in your avatar menu to connect real Drive, Gmail, Notion, and GitHub accounts via OAuth.
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-3">
         {conns.map((c, i) => {
           const sync = syncs[c.id];
@@ -144,12 +153,29 @@ export default function SourcesPage() {
                   {c.provider === "local" && <AutoIngestButton onComplete={markDesktopIngested} />}
                   <button
                     onClick={() => toggle(c)}
-                    className={`relative w-12 h-6 rounded-full transition ${c.on ? "bg-[var(--ember)]" : "bg-[var(--bg-3)]"}`}
-                    aria-label="Toggle connector"
+                    aria-label={c.on ? "Disable connector" : "Enable connector"}
+                    aria-pressed={c.on}
+                    title={c.on ? "Click to pause this connector" : "Click to enable this connector"}
+                    className={`relative inline-flex items-center w-[58px] h-7 rounded-full border transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--ember)]/50 ${
+                      c.on
+                        ? "bg-[var(--ember)] border-[var(--ember)]"
+                        : "bg-[var(--bg-3)] border-[var(--line-2)]"
+                    }`}
                   >
                     <span
-                      className={`absolute top-0.5 size-5 rounded-full bg-white transition-transform ${c.on ? "translate-x-[26px]" : "translate-x-0.5"}`}
+                      className={`absolute top-1/2 -translate-y-1/2 size-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                        c.on ? "translate-x-[33px]" : "translate-x-1"
+                      }`}
                     />
+                    <span
+                      className={`mono cap text-[8px] font-bold pointer-events-none select-none transition-opacity duration-200 ${
+                        c.on
+                          ? "opacity-100 text-white ml-1.5"
+                          : "opacity-100 text-[var(--muted)] ml-[28px]"
+                      }`}
+                    >
+                      {c.on ? "ON" : "OFF"}
+                    </span>
                   </button>
                 </div>
               </div>

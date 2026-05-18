@@ -228,7 +228,7 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
             {
               icon: Lock,
               title: "We store",
-              body: "Text is saved to your private Supabase workspace. Encrypted at rest. RLS-protected.",
+              body: "Text is processed and indexed only after your explicit permission. Raw files are never shared publicly.",
             },
             {
               icon: Shield,
@@ -304,7 +304,7 @@ export function AutoIngest({ onComplete, variant = "page" }: AutoIngestProps) {
         <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
           <FileText size={11} />
           {step === "scanning" && "Looking for TXT, MD, PDF, DOCX, CSV, JSON…"}
-          {step === "uploading" && "Parsing text and saving to your private workspace"}
+              {step === "uploading" && "Parsing text and indexing it into your private workspace"}
         </div>
 
         <button onClick={() => { abortRef.current = true; reset(); }} className="mt-3 text-[11px] text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1">

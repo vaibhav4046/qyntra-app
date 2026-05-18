@@ -11,9 +11,9 @@ import { ArrowRight, Shield, Lock, Zap, ArrowLeft, AlertCircle, ExternalLink, Co
 import { useEffect, useState } from "react";
 
 const ALL_PROVIDERS = [
-  { id: "google", label: "Google", icon: "drive", desc: "Drive + Gmail · One sign-in", color: "#4285F4", env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
-  { id: "github", label: "GitHub", icon: "github", desc: "Repos, issues, gists", color: "#ffffff", env: ["GITHUB_ID", "GITHUB_SECRET"] },
+  { id: "google", label: "Google", icon: "google", desc: "Sign in once. Drive + Gmail scopes included.", color: "#4285F4", env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
   { id: "notion", label: "Notion", icon: "notion", desc: "Sign in with your Notion workspace", color: "#ffffff", env: ["NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET", "NOTION_REDIRECT_URI"] },
+  { id: "github", label: "GitHub", icon: "github", desc: "Repos, issues, gists", color: "#ffffff", env: ["GITHUB_ID", "GITHUB_SECRET"] },
 ];
 
 export function SignInClient() {
@@ -147,58 +147,83 @@ export function SignInClient() {
                 {loadingProviders ? (
                   <div className="text-[13px] text-[var(--muted)] py-4">Loading providers…</div>
                 ) : (
-                  availableProviders.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => p.enabled && handleSignIn(p.id)}
-                      disabled={!p.enabled}
-                      title={p.enabled ? `Continue with ${p.label}` : `${p.label} OAuth not configured. Use email + password below.`}
-                      className={`w-full p-4 rounded border transition flex items-center gap-3 text-left group ${
-                        p.enabled
-                          ? "border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] cursor-pointer"
-                          : "border-[var(--line)] opacity-50 cursor-not-allowed"
-                      }`}
+                  <>
+                    {availableProviders.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => p.enabled && handleSignIn(p.id)}
+                        disabled={!p.enabled}
+                        title={p.enabled ? `Continue with ${p.label}` : `${p.label} OAuth not configured. Use email + password below.`}
+                        className={`w-full p-4 rounded border transition flex items-center gap-3 text-left group ${
+                          p.enabled
+                            ? "border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] cursor-pointer"
+                            : "border-[var(--line)] opacity-50 cursor-not-allowed"
+                        }`}
+                      >
+                        <div className="size-10 rounded bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
+                          <ConnIcon kind={p.icon} size={22} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[14px] flex items-center gap-2">
+                            Continue with {p.label}
+                            {!p.enabled && (
+                              <span className="pixel text-[9px] px-1.5 py-0.5 rounded bg-[var(--muted)]/20 text-[var(--muted)]">
+                                SETUP
+                              </span>
+                            )}
+                          </div>
+                          <div className="pixel text-[11px] text-[var(--muted)]">{p.desc}</div>
+                        </div>
+                        <ArrowRight
+                          size={14}
+                          className={`text-[var(--muted)] ${p.enabled ? "group-hover:text-[var(--ember)]" : ""} transition`}
+                        />
+                      </button>
+                    ))}
+                    <Link
+                      href="/demo"
+                      className="w-full p-4 rounded border border-[var(--gold)]/45 bg-[var(--gold)]/5 hover:bg-[var(--gold)]/10 transition flex items-center gap-3 text-left group"
                     >
-                      <div className="size-10 rounded bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
-                        <ConnIcon kind={p.icon} size={22} />
+                      <div className="size-10 rounded bg-[var(--gold)]/15 flex items-center justify-center flex-shrink-0">
+                        <Zap size={19} className="text-[var(--gold)]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[14px] flex items-center gap-2">
-                          Continue with {p.label}
-                          {!p.enabled && (
-                            <span className="pixel text-[9px] px-1.5 py-0.5 rounded bg-[var(--muted)]/20 text-[var(--muted)]">
-                              SETUP
-                            </span>
-                          )}
-                        </div>
-                        <div className="pixel text-[11px] text-[var(--muted)]">{p.desc}</div>
+                        <div className="text-[14px]">Try Demo Workspace</div>
+                        <div className="pixel text-[11px] text-[var(--muted)]">Judge-safe sample wiki. No OAuth required.</div>
                       </div>
-                      <ArrowRight
-                        size={14}
-                        className={`text-[var(--muted)] ${p.enabled ? "group-hover:text-[var(--ember)]" : ""} transition`}
-                      />
-                    </button>
-                  ))
+                      <ArrowRight size={14} className="text-[var(--muted)] group-hover:text-[var(--gold)] transition" />
+                    </Link>
+                  </>
                 )}
               </div>
 
-              {!noProviders && <EmailSignupForm mode={mode} />}
-
-              {!noProviders && (
-                <div className="mt-6 pt-6 border-t border-[var(--line)] flex flex-col gap-2">
-                  <Link
-                    href={mode === "signup" ? "/signin" : "/signin?mode=signup"}
-                    className="pixel text-[13px] text-[var(--text-2)] hover:text-[var(--ember)]"
-                  >
-                    {mode === "signup" ? "Already have a workspace? Sign in →" : "No workspace yet? Create one →"}
-                  </Link>
-                  <Link
-                    href="/forgot-password"
-                    className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
-                  >
-                    Can&apos;t access your workspace? →
-                  </Link>
+              {noProviders ? (
+                <div className="mt-6">
+                  <SetupGuide configured={configured} />
                 </div>
+              ) : (
+                <>
+                  <EmailSignupForm mode={mode} />
+                  <div className="mt-6 pt-6 border-t border-[var(--line)] flex flex-col gap-2">
+                    <Link
+                      href={mode === "signup" ? "/signin" : "/signin?mode=signup"}
+                      className="pixel text-[13px] text-[var(--text-2)] hover:text-[var(--ember)]"
+                    >
+                      {mode === "signup" ? "Already have a workspace? Sign in →" : "No workspace yet? Create one →"}
+                    </Link>
+                    <Link
+                      href="/forgot-password"
+                      className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
+                    >
+                      Can&apos;t access your workspace? →
+                    </Link>
+                  </div>
+                  {configured.length < ALL_PROVIDERS.length && (
+                    <div className="mt-6">
+                      <SetupGuide configured={configured} />
+                    </div>
+                  )}
+                </>
               )}
 
               <p className="pixel text-[10px] text-[var(--muted)] mt-6 leading-relaxed">

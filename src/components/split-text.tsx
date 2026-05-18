@@ -21,33 +21,22 @@ export function SplitText({ text, delay = 0, stagger = 30, className = "", cycle
   }, [cycle, cycleInterval]);
 
   const words = text.split(" ");
-  let charIdx = 0;
 
   return (
     <span key={key} className={className} style={{ display: "inline" }}>
       {words.map((word, wi) => {
-        const chars = [...word];
-        const wordStart = charIdx;
-        charIdx += chars.length + 1;
         return (
-          <span key={wi} style={{ display: "inline-block", whiteSpace: "nowrap" }}>
-            {chars.map((c, ci) => (
-              <span
-                key={ci}
-                className="char"
-                style={{ animationDelay: `${delay + (wordStart + ci) * stagger}ms` }}
-              >
-                {c}
-              </span>
-            ))}
-            {wi < words.length - 1 && (
-              <span
-                className="char"
-                style={{ animationDelay: `${delay + (wordStart + chars.length) * stagger}ms` }}
-              >
-                {"\u00A0"}
-              </span>
-            )}
+          <span
+            key={wi}
+            className="char"
+            style={{
+              display: "inline-block",
+              whiteSpace: "nowrap",
+              animationDelay: `${delay + wi * stagger}ms`,
+            }}
+          >
+            {word}
+            {wi < words.length - 1 ? "\u00A0" : ""}
           </span>
         );
       })}

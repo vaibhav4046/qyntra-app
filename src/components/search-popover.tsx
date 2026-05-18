@@ -86,14 +86,22 @@ export function SearchPopover() {
   function onSubmit() {
     const idx = active;
     if (idx < hits.length) {
-      const hit = hits[idx];
-      if (hit.source_url) window.open(hit.source_url, "_blank");
-      else router.push("/files");
+      openHit(hits[idx]);
     } else {
       const sIdx = idx - hits.length;
-      const text = filteredSuggestions[sIdx] || q;
-      router.push(`/ask?q=${encodeURIComponent(text)}`);
+      openAsk(filteredSuggestions[sIdx] || q);
     }
+    setOpen(false);
+  }
+
+  function openHit(hit: FileHit) {
+    if (hit.source_url) window.open(hit.source_url, "_blank");
+    else router.push(`/files?q=${encodeURIComponent(hit.title)}`);
+    setOpen(false);
+  }
+
+  function openAsk(text: string) {
+    router.push(`/ask?q=${encodeURIComponent(text)}`);
     setOpen(false);
   }
 
@@ -136,7 +144,7 @@ export function SearchPopover() {
               {hits.map((h, i) => (
                 <button
                   key={h.id}
-                  onClick={() => { setActive(i); onSubmit(); }}
+                  onClick={() => openHit(h)}
                   onMouseEnter={() => setActive(i)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-left ${active === i ? "bg-[var(--ember)]/10" : "hover:bg-[var(--bg-1)]"}`}
                 >
@@ -160,7 +168,7 @@ export function SearchPopover() {
                 return (
                   <button
                     key={s}
-                    onClick={() => { setActive(idx); onSubmit(); }}
+                    onClick={() => openAsk(s)}
                     onMouseEnter={() => setActive(idx)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-left ${active === idx ? "bg-[var(--ember)]/10" : "hover:bg-[var(--bg-1)]"}`}
                   >

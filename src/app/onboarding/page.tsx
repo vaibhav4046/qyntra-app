@@ -53,6 +53,11 @@ export default function OnboardingPage() {
   const [idx, setIdx] = useState(0);
   const [connected, setConnected] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [alreadyOnboarded, setAlreadyOnboarded] = useState(false);
+
+  useEffect(() => {
+    setAlreadyOnboarded(localStorage.getItem(LS_ONBOARDED) === "1");
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin?callbackUrl=/onboarding");
@@ -143,6 +148,22 @@ export default function OnboardingPage() {
           </button>
         ))}
       </div>
+
+      {alreadyOnboarded && (
+        <div className="max-w-[760px] mx-auto px-6 pt-6">
+          <div className="p-3 rounded border border-[var(--good)]/30 bg-[var(--good)]/5 flex items-center justify-between">
+            <span className="pixel text-[12px] text-[var(--good)]">
+              Already onboarded.
+            </span>
+            <button
+              onClick={() => finish(false)}
+              className="pixel text-[12px] px-3 py-1.5 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)]"
+            >
+              Enter workspace →
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-[760px] mx-auto px-6 py-12">
         <AnimatePresence mode="wait">

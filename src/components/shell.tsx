@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ConnIcon } from "./conn-icon";
 import { useConnectorStore } from "@/lib/connector-store";
 import type { QConnector } from "@/lib/data";
-import { Home, MessageSquare, BookOpen, FileText, Plug, Search, Command, Boxes, LogOut, Menu, X } from "lucide-react";
+import { Home, MessageSquare, BookOpen, FileText, Plug, Search, Boxes, Menu, X } from "lucide-react";
 import { Logo } from "./logo";
 import { SearchPopover } from "./search-popover";
 import { AvatarMenu } from "./avatar-menu";
@@ -93,7 +93,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="mono cap text-[10px] hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded border border-[var(--line)]">
-            <span className="size-1.5 rounded-full bg-[var(--good)] halo" /> SYNCED · 2M
+            <span className="size-1.5 rounded-full bg-[var(--ember)]" /> MEMORY READY
           </div>
           <div className="mono cap text-[10px] hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded border border-[var(--ember)]/30 text-[var(--ember)]">
             <span className="size-1.5 rounded-full bg-[var(--ember)]" /> HYDRA

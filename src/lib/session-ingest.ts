@@ -1,5 +1,6 @@
 import type { Session } from "next-auth";
 import { isTokenExpired, refreshGoogleToken } from "@/lib/token-refresh";
+import { markConnectorSynced } from "@/lib/ingest";
 
 export const REMOVED_INGEST_PROVIDERS = new Set(["slack", "linkedin"]);
 
@@ -77,6 +78,16 @@ export async function getSessionAccessTokenForIngest(
   const refreshed = await refreshGoogleToken(session.refreshToken);
   if (!refreshed?.access_token) {
     throw new Error(`Failed to refresh your ${getProviderDisplayName(provider)} token. Please re-authenticate.`);
+  }
+
+  // Persist refreshed token to DB so cron and future requests can use it
+  // even if the session cookie still carries the old token.
+  if (session.user?.id) {
+    try {
+      await markConnectorSynced(session.user.id, provider, 0, refreshed.access_token);
+    } catch {
+      // Non-fatal: DB update best-effort
+    }
   }
 
   return refreshed.access_token;

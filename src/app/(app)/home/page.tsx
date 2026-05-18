@@ -157,7 +157,7 @@ export default function HomePage() {
             <p className="text-[14px] sm:text-[15px] text-[var(--text-2)] mt-2 max-w-[560px]">
               {demoMode
                 ? "Walk the connections in the 3D Galaxy. Click any entity for details."
-                : "Head to /sources to connect Notion, Drive, Gmail, Slack, or GitHub. Each source instantly populates your wiki."}
+                : "Head to /sources to connect Notion, Drive, Gmail, GitHub, or Desktop. Each source populates your wiki after consent."}
             </p>
             <span className="mono cap text-[10px] text-[var(--ember)] mt-3 inline-flex items-center gap-1">
               Open the map <ArrowRight size={11} />

@@ -22,16 +22,18 @@ export interface IngestResult {
 export async function ingestRows(rows: IngestRow[]): Promise<number> {
   if (!rows.length) return 0;
   const sb = supabaseAdmin();
+  const userId = rows[0].user_id;
+  const source = rows[0].source;
 
-  for (const row of rows) {
-    if (row.source_id) {
-      await sb
-        .from("files")
-        .delete()
-        .eq("user_id", row.user_id)
-        .eq("source", row.source)
-        .eq("source_id", row.source_id);
-    }
+  // Atomic replacement: delete all existing rows for this user+source, then insert fresh.
+  // This prevents duplicates and stale data from partial deletes.
+  const { error: delErr } = await sb
+    .from("files")
+    .delete()
+    .eq("user_id", userId)
+    .eq("source", source);
+  if (delErr) {
+    throw new Error(`Supabase delete failed: ${delErr.message}`);
   }
 
   const { error } = await sb.from("files").insert(rows);
@@ -162,6 +164,7 @@ export async function fetchGmailMessages(token: string, userId: string): Promise
     const headers = Object.fromEntries(
       ((m.payload?.headers || []) as GmailHeader[]).map((h) => [h.name, h.value])
     );
+    const dateIso = headers.Date ? new Date(headers.Date).toISOString() : undefined;
     rows.push({
       user_id: userId,
       source: "gmail",
@@ -171,7 +174,7 @@ export async function fetchGmailMessages(token: string, userId: string): Promise
       title: headers.Subject || "(no subject)",
       summary: m.snippet,
       content: `From: ${headers.From || ""}\nDate: ${headers.Date || ""}\n\n${m.snippet || ""}`,
-      last_modified: headers.Date,
+      last_modified: dateIso,
       tags: ["gmail"],
     });
   }
