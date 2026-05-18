@@ -17,10 +17,13 @@ declare module "next-auth" {
 
 const providers = [];
 
-/* ─── AUTH-ONLY PROVIDERS ───
- * Slack is intentionally excluded from sign-in.
- * It is available for ingestion via /sources with its own OAuth flow.
- * Slack user tokens expire in ~12 hours, making them unsuitable for session auth.
+/* ─── PROVIDER SPLIT ───
+ * SIGN-IN  → GitHub, Notion  (primary identity providers)
+ * INGESTION → Google, LinkedIn, GitHub, Notion, Slack
+ *   - Google & LinkedIn stay in auth.ts so /sources can call signIn()
+ *     to exchange tokens for Drive/Gmail/Profile ingestion.
+ *   - Slack is excluded from auth.ts because user tokens expire in ~12 hours.
+ *     Slack uses a custom OAuth flow via /api/connectors/slack/*
  */
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {

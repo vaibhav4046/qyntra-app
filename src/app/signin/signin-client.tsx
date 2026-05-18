@@ -11,9 +11,7 @@ import { ArrowRight, Shield, Lock, Zap, ArrowLeft, AlertCircle, ExternalLink, Co
 import { useEffect, useState } from "react";
 
 const ALL_PROVIDERS = [
-  { id: "google", label: "Google", icon: "drive", desc: "Drive + Gmail · One sign-in", color: "#4285F4", env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
   { id: "github", label: "GitHub", icon: "github", desc: "Repos, issues, gists", color: "#ffffff", env: ["GITHUB_ID", "GITHUB_SECRET"] },
-  { id: "linkedin", label: "LinkedIn", icon: "linkedin", desc: "Profile + connections", color: "#0A66C2", env: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"] },
   { id: "notion", label: "Notion", icon: "notion", desc: "Sign in with your Notion workspace", color: "#ffffff", env: ["NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET", "NOTION_REDIRECT_URI"] },
 ];
 
@@ -203,17 +201,6 @@ function SetupGuide() {
 
   const guides = [
     {
-      name: "Google",
-      link: "https://console.cloud.google.com/apis/credentials",
-      steps: [
-        "Go to Google Cloud Console → APIs & Services → Credentials",
-        "Create OAuth 2.0 Client ID (Web application)",
-        `Add redirect URI: ${baseUrl}/api/auth/callback/google`,
-        "Copy Client ID and Client Secret to Vercel env vars",
-      ],
-      env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
-    },
-    {
       name: "GitHub",
       link: "https://github.com/settings/developers",
       steps: [
@@ -222,17 +209,6 @@ function SetupGuide() {
         "Copy Client ID and Client Secret to Vercel env vars",
       ],
       env: ["GITHUB_ID", "GITHUB_SECRET"],
-    },
-    {
-      name: "LinkedIn",
-      link: "https://www.linkedin.com/developers/apps",
-      steps: [
-        "Go to LinkedIn Developers → My Apps → Create App",
-        "Add OAuth 2.0 Authorized Redirect URL",
-        `Set redirect: ${baseUrl}/api/auth/callback/linkedin`,
-        "Copy Client ID and Client Secret to Vercel env vars",
-      ],
-      env: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
     },
     {
       name: "Notion",
