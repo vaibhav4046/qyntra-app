@@ -90,6 +90,8 @@ export default function AskPage() {
   async function sendSeeded(userText: string) {
     if (streaming) return;
     setChatError(null);
+    isFollowingRef.current = true;
+    setShowScrollDown(false);
     setInput("");
     pushMessage({ role: "user", content: userText });
     pushMessage({ role: "assistant", content: "" });
@@ -169,6 +171,8 @@ export default function AskPage() {
   async function send() {
     if (!input.trim() || streaming) return;
     setChatError(null);
+    isFollowingRef.current = true; // Reset follow lock when user sends a message
+    setShowScrollDown(false);
     const userText = input;
     setInput("");
     if (!activeId) newChat();

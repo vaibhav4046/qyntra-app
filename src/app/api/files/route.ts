@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
+import { supabaseAdmin, hasSupabase, ensureProfile } from "@/lib/supabase";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -81,6 +81,9 @@ export async function POST(req: Request) {
   if (!hasSupabase()) {
     return Response.json({ error: "Supabase not configured" }, { status: 503 });
   }
+
+  // CRITICAL: Ensure profile exists before inserting files (FK constraint)
+  await ensureProfile(session.user.id, session.user.email, session.user.name);
 
   try {
     const formData = await req.formData();

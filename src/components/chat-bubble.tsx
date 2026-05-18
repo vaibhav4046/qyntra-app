@@ -53,6 +53,8 @@ export function ChatBubble() {
   async function send() {
     if (!input.trim() || streaming) return;
     setError(null);
+    isFollowingRef.current = true; // Reset follow lock when user sends a message
+    setShowScrollBtn(false);
     const userMsg: Msg = { role: "user", content: input };
     const next = [...messages, userMsg];
     setMessages(next);

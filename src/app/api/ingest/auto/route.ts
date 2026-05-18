@@ -5,7 +5,7 @@ import {
   getProviderDisplayName,
   getSessionAccessTokenForIngest,
 } from "@/lib/session-ingest";
-import { hasSupabase } from "@/lib/supabase";
+import { hasSupabase, ensureProfile } from "@/lib/supabase";
 
 interface AutoIngestResult {
   provider: string;
@@ -23,6 +23,9 @@ export async function POST() {
   if (!session?.user?.id) {
     return Response.json({ ok: false, error: "Unauthenticated" }, { status: 401 });
   }
+
+  // CRITICAL: Ensure profile exists before inserting files (FK constraint)
+  await ensureProfile(session.user.id, session.user.email, session.user.name);
 
   const targets = getAutoIngestTargets(session.provider);
   if (!targets.length) {
