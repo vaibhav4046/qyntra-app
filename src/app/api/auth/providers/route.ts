@@ -1,7 +1,8 @@
 export async function GET() {
   /* Auth-providers endpoint: returns only the providers suitable for sign-in.
-   * Slack is excluded because its user token expires in ~12 hours and is
-   * therefore only available for ingestion via /sources (not login). */
+   * Slack is excluded because it is ingestion-only (custom OAuth).
+   * Slack user tokens expire in ~12 hours, making them unsuitable for session auth.
+   */
   const configured: { id: string; name: string }[] = [];
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
