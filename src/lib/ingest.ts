@@ -284,6 +284,23 @@ function settledArray<T>(result: PromiseSettledResult<T[]>): T[] {
   return result.status === "fulfilled" ? result.value : [];
 }
 
+async function fetchRepoReadme(token: string, fullName: string): Promise<string> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${fullName}/readme`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github.raw",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (!res.ok) return "";
+    const text = await res.text();
+    return text.slice(0, 8000); // cap per-repo
+  } catch {
+    return "";
+  }
+}
+
 export async function fetchGithubData(token: string, userId: string): Promise<IngestRow[]> {
   const [reposResult, gistsResult, issuesResult, starredResult] = await Promise.allSettled([
     fetchGithubJson<GhRepo[]>(token, "/user/repos?per_page=50&sort=updated"),
@@ -298,18 +315,38 @@ export async function fetchGithubData(token: string, userId: string): Promise<In
   const starred = settledArray(starredResult);
   const rows: IngestRow[] = [];
 
+  // Fetch READMEs for top 20 owned repos in parallel batches of 5
+  const readmes = new Map<string, string>();
+  const topRepos = repos.slice(0, 20);
+  for (let i = 0; i < topRepos.length; i += 5) {
+    const batch = topRepos.slice(i, i + 5);
+    const fetched = await Promise.all(
+      batch.map(async (r) => ({ name: r.full_name, content: await fetchRepoReadme(token, r.full_name) }))
+    );
+    for (const { name, content } of fetched) {
+      if (content) readmes.set(name, content);
+    }
+  }
+
   rows.push(
-    ...repos.map((r) => ({
-      user_id: userId,
-      source: "github",
-      source_id: `repo:${r.id}`,
-      source_url: r.html_url,
-      kind: "REPO",
-      title: r.full_name,
-      summary: r.description || undefined,
-      last_modified: r.updated_at,
-      tags: ["github", "repo", r.language || ""].filter(Boolean),
-    }))
+    ...repos.map((r) => {
+      const readme = readmes.get(r.full_name) || "";
+      const fullContent = readme
+        ? `${r.description ? r.description + "\n\n" : ""}${readme}`
+        : r.description || "";
+      return {
+        user_id: userId,
+        source: "github",
+        source_id: `repo:${r.id}`,
+        source_url: r.html_url,
+        kind: "REPO",
+        title: r.full_name,
+        summary: r.description || (readme ? readme.slice(0, 240) : undefined),
+        content: fullContent || undefined,
+        last_modified: r.updated_at,
+        tags: ["github", "repo", r.language || ""].filter(Boolean),
+      };
+    })
   );
 
   rows.push(
