@@ -122,7 +122,15 @@ body {
 
 ::selection { background: rgba(255, 91, 31, 0.35); color: var(--text); }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
+/* Scrollbar — visible ember-themed */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255,91,31,0.55), rgba(255,91,31,0.25));
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.02);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(255,91,31,0.85), rgba(255,91,31,0.45));
+}
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255,91,31,0.4) transparent; }
