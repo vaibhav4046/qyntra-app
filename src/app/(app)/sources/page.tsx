@@ -9,6 +9,7 @@ import { useConnectorStore } from "@/lib/connector-store";
 import { ConnectGuide } from "@/components/connect-guide";
 import { RefreshCw, Check, AlertCircle } from "lucide-react";
 import { AutoIngestButton } from "@/components/auto-ingest";
+import { useProfileStore } from "@/lib/profile-store";
 
 interface SyncState {
   loading: boolean;
@@ -19,6 +20,7 @@ interface SyncState {
 
 export default function SourcesPage() {
   const { data: session } = useSession();
+  const { demoMode } = useProfileStore();
   const { connectors: conns, syncing, init, toggle } = useConnectorStore();
   const [syncs, setSyncs] = useState<Record<string, SyncState>>({});
 
@@ -95,12 +97,28 @@ export default function SourcesPage() {
                   </div>
                   <div>
                     <h3 className="text-[17px] font-semibold">{c.name}</h3>
-                    <div
-                      className="mono cap text-[10px]"
-                      style={{ color: syncing[c.id] ? "var(--gold)" : c.on ? "var(--good)" : "var(--muted)" }}
-                    >
-                      {syncing[c.id] ? "SYNCING..." : c.on ? `LIVE - ${c.count} ITEMS` : "NOT CONNECTED"}
-                    </div>
+                    {(() => {
+                      const isDemo = demoMode && c.on;
+                      const label = syncing[c.id]
+                        ? "SYNCING..."
+                        : isDemo
+                        ? `DEMO - SAMPLE DATA - ${c.count} ITEMS`
+                        : c.on
+                        ? `LIVE - ${c.count} ITEMS`
+                        : "NOT CONNECTED";
+                      const color = syncing[c.id]
+                        ? "var(--gold)"
+                        : isDemo
+                        ? "var(--gold)"
+                        : c.on
+                        ? "var(--good)"
+                        : "var(--muted)";
+                      return (
+                        <div className="mono cap text-[10px]" style={{ color }}>
+                          {label}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex gap-2 items-center">
@@ -114,8 +132,9 @@ export default function SourcesPage() {
                       </button>
                       <button
                         onClick={() => syncNow(c)}
-                        disabled={sync?.loading}
-                        className="mono cap text-[10px] px-3 py-1.5 rounded border border-[var(--gold)]/40 text-[var(--gold)] hover:bg-[var(--gold)]/10 flex items-center gap-1.5 disabled:opacity-50"
+                        disabled={sync?.loading || demoMode}
+                        title={demoMode ? "Turn demo mode off to sync real data" : "Sync now"}
+                        className="mono cap text-[10px] px-3 py-1.5 rounded border border-[var(--gold)]/40 text-[var(--gold)] hover:bg-[var(--gold)]/10 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RefreshCw size={11} className={sync?.loading ? "animate-spin" : ""} />
                         {sync?.loading ? "SYNCING" : "SYNC"}

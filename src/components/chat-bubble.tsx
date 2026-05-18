@@ -97,7 +97,7 @@ export function ChatBubble() {
               </button>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4" style={{ overscrollBehavior: "contain" }}>
               {messages.length === 0 && (
                 <div className="text-center py-10">
                   <div className="mono cap text-[10px] text-[var(--muted)] mb-3">SUGGESTED</div>
