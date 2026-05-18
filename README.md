@@ -274,6 +274,8 @@ qyntra-app/
 1. **Sign in** — Email magic link (no passwords, no OAuth setup)
 2. **Connect** — Pick a desktop folder, or OAuth with Google/GitHub/Notion
 3. **Explore** — Files → Ask → Read → Galaxy. All your knowledge, alive.
+<img width="1880" height="901" alt="image" src="https://github.com/user-attachments/assets/d9808b24-4937-4bba-8e4e-329455bf5f23" />
+
 
 ---
 
