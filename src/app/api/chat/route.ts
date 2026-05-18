@@ -27,7 +27,7 @@ function truncateContent(content: string | undefined | null, maxTokens: number):
   return content.slice(0, maxChars) + "\n[…truncated]";
 }
 
-async function loadUserCorpus(userId: string, limit = 60): Promise<{ files: UserFile[]; totalContentChars: number }> {
+async function loadUserCorpus(userId: string, limit = 25): Promise<{ files: UserFile[]; totalContentChars: number }> {
   if (!hasSupabase() || !userId) return { files: [], totalContentChars: 0 };
   try {
     const sb = supabaseAdmin();
@@ -64,8 +64,8 @@ Rules:
   }
 
   // Build corpus with rich content. Prioritize: title + summary + truncated content.
-  // Budget: ~600 tokens per file ⇒ ~18K tokens for 30 files, well under 32K context.
-  const perFileContentBudget = 600; // tokens per file for content
+  // Budget: Groq free tier TPM = 12K. 25 files * 350 tokens ~= 8.75K + system overhead.
+  const perFileContentBudget = 350; // tokens per file for content
   let corpusLines: string[] = [];
   let contentCharsUsed = 0;
 
@@ -124,10 +124,9 @@ export async function POST(req: Request) {
   const totalInputTokens = systemTokens + conversationTokens;
 
   // Cap max_tokens dynamically based on context size.
-  // Groq Llama 3.3 70B Versatile supports 128K context, but per-request Groq
-  // limits output to 32K tokens. Use 32K context budget (input + output).
-  const contextBudget = 32000;
-  const maxTokens = Math.min(4096, contextBudget - totalInputTokens);
+  // Groq free tier TPM limit = 12K tokens/minute. Stay safely under.
+  const contextBudget = 11500;
+  const maxTokens = Math.min(2048, contextBudget - totalInputTokens);
   if (maxTokens < 256) {
     return Response.json(
       { error: "Context window full. Try a shorter question or clear the conversation." },
