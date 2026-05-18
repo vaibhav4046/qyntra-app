@@ -1,5 +1,7 @@
 export async function GET() {
   // Auth providers shown on /signin and /signup.
+  // NOTE: env vars must be set in Vercel Dashboard > Settings > Environment Variables
+  // and the project redeployed before they appear here.
   const configured: { id: string; name: string }[] = [];
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
