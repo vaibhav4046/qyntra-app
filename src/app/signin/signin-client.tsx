@@ -44,22 +44,15 @@ export function SignInClient() {
   }, []);
 
   function handleSignIn(providerId: string) {
-    // Auth.js v5 beta.31 client has a bug where signIn() redirects to
-    // /api/auth/signin/{provider} via GET, but the server only accepts POST.
-    // We manually POST a form to /api/auth/signin instead.
+    // Auth.js v5 beta.31 client signIn() makes a GET to /api/auth/signin/{provider},
+    // but the server only accepts POST. We POST a form directly.
     fetch("/api/auth/csrf", { credentials: "include" })
       .then((r) => r.json())
       .then(({ csrfToken }) => {
         const form = document.createElement("form");
         form.method = "POST";
-        form.action = "/api/auth/signin";
+        form.action = `/api/auth/signin/${providerId}`;
         form.style.display = "none";
-
-        const providerInput = document.createElement("input");
-        providerInput.type = "hidden";
-        providerInput.name = "provider";
-        providerInput.value = providerId;
-        form.appendChild(providerInput);
 
         const callbackInput = document.createElement("input");
         callbackInput.type = "hidden";
@@ -77,7 +70,7 @@ export function SignInClient() {
         form.submit();
       })
       .catch(() => {
-        // Fallback: try the broken signIn() anyway
+        // Fallback: try the library signIn() anyway
         signIn(providerId, { callbackUrl });
       });
   }
