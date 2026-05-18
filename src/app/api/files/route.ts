@@ -45,7 +45,7 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
 
   // Plain text files
   if (["txt", "md", "csv", "json", "xml", "text", "markdown", "js", "ts", "tsx", "jsx", "py", "html", "css", "sql"].includes(ext)) {
-    return buffer.toString("utf-8").slice(0, 50000);
+    return buffer.toString("utf-8").slice(0, 100000);
   }
 
   // PDF — try pdf-parse if installed
@@ -53,7 +53,7 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
     try {
       const { default: pdfParse } = await import("pdf-parse") as any;
       const result = await pdfParse(buffer);
-      return (result.text || "").slice(0, 50000);
+      return (result.text || "").slice(0, 100000);
     } catch {
       return "";
     }
@@ -64,7 +64,7 @@ async function extractText(buffer: Buffer, filename: string): Promise<string> {
     try {
       const mammoth = await import("mammoth") as any;
       const result = await mammoth.extractRawText({ buffer });
-      return (result.value || "").slice(0, 50000);
+      return (result.value || "").slice(0, 100000);
     } catch {
       return "";
     }

@@ -242,39 +242,93 @@ interface GmailHeader {
   value: string;
 }
 
+interface GmailPart {
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailPart[];
+}
+
+function decodeGmailBase64Url(data: string): string {
+  try {
+    const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+    return Buffer.from(normalized, "base64").toString("utf-8");
+  } catch {
+    return "";
+  }
+}
+
+function extractGmailBody(payload: GmailPart | undefined): string {
+  if (!payload) return "";
+  // Prefer text/plain, fallback text/html stripped of tags
+  function walk(p: GmailPart): { plain?: string; html?: string } {
+    if (p.mimeType === "text/plain" && p.body?.data) return { plain: decodeGmailBase64Url(p.body.data) };
+    if (p.mimeType === "text/html" && p.body?.data) return { html: decodeGmailBase64Url(p.body.data) };
+    if (p.parts) {
+      const out: { plain?: string; html?: string } = {};
+      for (const child of p.parts) {
+        const w = walk(child);
+        if (w.plain && !out.plain) out.plain = w.plain;
+        if (w.html && !out.html) out.html = w.html;
+      }
+      return out;
+    }
+    return {};
+  }
+  const { plain, html } = walk(payload);
+  if (plain) return plain;
+  if (html) return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return "";
+}
+
 export async function fetchGmailMessages(token: string, userId: string): Promise<IngestRow[]> {
   const list = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=in:inbox",
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=30&q=in:inbox",
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!list.ok) throw new Error(`Gmail API ${list.status}: ${await list.text()}`);
   const listData = await list.json();
-  const ids = ((listData.messages || []) as GmailMsg[]).slice(0, 20).map((m) => m.id);
+  const ids = ((listData.messages || []) as GmailMsg[]).slice(0, 25).map((m) => m.id);
 
   const rows: IngestRow[] = [];
-  for (const id of ids) {
-    const r = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-      { headers: { Authorization: `Bearer ${token}` } }
+  // Parallel fetch (Gmail allows ~10 RPS)
+  const batchSize = 5;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const fetched = await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const r = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!r.ok) return null;
+          return await r.json();
+        } catch {
+          return null;
+        }
+      })
     );
-    if (!r.ok) continue;
-    const m = await r.json();
-    const headers = Object.fromEntries(
-      ((m.payload?.headers || []) as GmailHeader[]).map((h) => [h.name, h.value])
-    );
-    const dateIso = headers.Date ? new Date(headers.Date).toISOString() : undefined;
-    rows.push({
-      user_id: userId,
-      source: "gmail",
-      source_id: m.id,
-      source_url: `https://mail.google.com/mail/u/0/#inbox/${m.id}`,
-      kind: "EMAIL",
-      title: headers.Subject || "(no subject)",
-      summary: m.snippet,
-      content: `From: ${headers.From || ""}\nDate: ${headers.Date || ""}\n\n${m.snippet || ""}`,
-      last_modified: dateIso,
-      tags: ["gmail"],
-    });
+    for (const m of fetched) {
+      if (!m) continue;
+      const headers = Object.fromEntries(
+        ((m.payload?.headers || []) as GmailHeader[]).map((h) => [h.name, h.value])
+      );
+      const dateIso = headers.Date ? new Date(headers.Date).toISOString() : undefined;
+      const body = extractGmailBody(m.payload).slice(0, 16000);
+      const content = `From: ${headers.From || ""}\nDate: ${headers.Date || ""}\nSubject: ${headers.Subject || ""}\n\n${body || m.snippet || ""}`;
+      rows.push({
+        user_id: userId,
+        source: "gmail",
+        source_id: m.id,
+        source_url: `https://mail.google.com/mail/u/0/#inbox/${m.id}`,
+        kind: "EMAIL",
+        title: headers.Subject || "(no subject)",
+        summary: (body || m.snippet || "").slice(0, 240),
+        content,
+        last_modified: dateIso,
+        tags: ["gmail"],
+      });
+    }
   }
   return rows;
 }
@@ -422,18 +476,38 @@ export async function fetchGithubData(token: string, userId: string): Promise<In
     }))
   );
 
+  // Fetch READMEs for top 10 starred repos too
+  const starredReadmes = new Map<string, string>();
+  const topStarred = starred.slice(0, 10);
+  for (let i = 0; i < topStarred.length; i += 5) {
+    const batch = topStarred.slice(i, i + 5);
+    const fetched = await Promise.all(
+      batch.map(async (r) => ({ name: r.full_name, content: await fetchRepoReadme(token, r.full_name) }))
+    );
+    for (const { name, content } of fetched) {
+      if (content) starredReadmes.set(name, content);
+    }
+  }
+
   rows.push(
-    ...starred.map((r) => ({
-      user_id: userId,
-      source: "github",
-      source_id: `starred:${r.id}`,
-      source_url: r.html_url,
-      kind: "STARRED_REPO",
-      title: r.full_name,
-      summary: r.description || undefined,
-      last_modified: r.updated_at,
-      tags: ["github", "starred", r.language || ""].filter(Boolean),
-    }))
+    ...starred.map((r) => {
+      const readme = starredReadmes.get(r.full_name) || "";
+      const fullContent = readme
+        ? `${r.description ? r.description + "\n\n" : ""}${readme}`
+        : r.description || "";
+      return {
+        user_id: userId,
+        source: "github",
+        source_id: `starred:${r.id}`,
+        source_url: r.html_url,
+        kind: "STARRED_REPO",
+        title: r.full_name,
+        summary: r.description || (readme ? readme.slice(0, 240) : undefined),
+        content: fullContent || undefined,
+        last_modified: r.updated_at,
+        tags: ["github", "starred", r.language || ""].filter(Boolean),
+      };
+    })
   );
 
   if (!rows.length) {
