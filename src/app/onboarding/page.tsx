@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Logo } from "@/components/logo";
 import { ConnIcon } from "@/components/conn-icon";
 import { SplitText } from "@/components/split-text";
@@ -17,10 +17,12 @@ import {
   Shield,
   ExternalLink,
   Loader2,
+  AlertCircle,
+  Cloud,
 } from "lucide-react";
 import { AutoIngest } from "@/components/auto-ingest";
 
-type StepId = "welcome" | "linkedin" | "slack" | "notion" | "desktop" | "review";
+type StepId = "welcome" | "cloud" | "desktop" | "review";
 
 interface Step {
   id: StepId;
@@ -28,12 +30,17 @@ interface Step {
   subtitle: string;
 }
 
+interface AutoResult {
+  provider: string;
+  label: string;
+  inserted?: number;
+  error?: string;
+}
+
 const STEPS: Step[] = [
-  { id: "welcome", title: "Welcome to Qyntra", subtitle: "5 quick steps · skip anytime" },
-  { id: "linkedin", title: "Connect LinkedIn", subtitle: "Profile, posts, network" },
-  { id: "slack", title: "Connect Slack", subtitle: "Channels and messages" },
-  { id: "notion", title: "Connect Notion", subtitle: "Workspaces, pages, docs" },
-  { id: "desktop", title: "Connect Desktop", subtitle: "Local files indexed privately" },
+  { id: "welcome", title: "Welcome to Qyntra", subtitle: "Consent first - ingest after approval" },
+  { id: "cloud", title: "Approve cloud ingest", subtitle: "OAuth source from this sign-in" },
+  { id: "desktop", title: "Approve desktop ingest", subtitle: "Local files stay user-selected" },
   { id: "review", title: "You're ready", subtitle: "Enter your workspace" },
 ];
 
@@ -54,10 +61,17 @@ export default function OnboardingPage() {
   const step = STEPS[idx];
   const progress = ((idx + 1) / STEPS.length) * 100;
 
-  function next() { setIdx((i) => Math.min(i + 1, STEPS.length - 1)); }
-  function back() { setIdx((i) => Math.max(i - 1, 0)); }
+  function next() {
+    setIdx((i) => Math.min(i + 1, STEPS.length - 1));
+  }
 
-  function markConnected(id: string) { setConnected((c) => ({ ...c, [id]: true })); }
+  function back() {
+    setIdx((i) => Math.max(i - 1, 0));
+  }
+
+  function markConnected(id: string) {
+    setConnected((c) => ({ ...c, [id]: true }));
+  }
 
   async function finish(demoMode: boolean) {
     setSaving(true);
@@ -83,7 +97,6 @@ export default function OnboardingPage() {
 
   return (
     <div className="relative min-h-screen bg-black text-white vgrid overflow-hidden">
-      {/* Nav */}
       <nav className="flex items-center justify-between px-6 py-5 border-b border-[var(--line)] bg-black/60 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <Logo size={28} withGlow />
@@ -98,12 +111,11 @@ export default function OnboardingPage() {
             disabled={saving}
             className="pixel text-[12px] text-[var(--text-2)] hover:text-[var(--ember)] flex items-center gap-1.5"
           >
-            <SkipForward size={13} /> Skip — see demo
+            <SkipForward size={13} /> Skip - see demo
           </button>
         </div>
       </nav>
 
-      {/* Progress bar */}
       <div className="h-1 bg-[var(--line)] overflow-hidden">
         <motion.div
           className="h-full bg-gradient-to-r from-[var(--ember)] to-[var(--gold)]"
@@ -112,7 +124,6 @@ export default function OnboardingPage() {
         />
       </div>
 
-      {/* Stepper */}
       <div className="px-6 py-4 border-b border-[var(--line)] flex gap-1.5 overflow-x-auto">
         {STEPS.map((s, i) => (
           <button
@@ -128,12 +139,11 @@ export default function OnboardingPage() {
             }`}
           >
             {i < idx && <Check size={10} />}
-            {String(i + 1).padStart(2, "0")} · {s.title}
+            {String(i + 1).padStart(2, "0")} - {s.title}
           </button>
         ))}
       </div>
 
-      {/* Body */}
       <div className="max-w-[760px] mx-auto px-6 py-12">
         <AnimatePresence mode="wait">
           <motion.div
@@ -151,13 +161,21 @@ export default function OnboardingPage() {
             </h1>
 
             {step.id === "welcome" && <WelcomeStep email={session?.user?.email || ""} />}
-            {step.id === "linkedin" && <ProviderStep id="linkedin" name="LinkedIn" desc="Index your profile, posts, and network. Read-only." authProvider="linkedin" connected={!!connected.linkedin} onConnected={() => markConnected("linkedin")} />}
-            {step.id === "slack" && <ProviderStep id="slack" name="Slack" desc="Channels you choose. Threads, files, links." authProvider="slack" connected={!!connected.slack} onConnected={() => markConnected("slack")} />}
-            {step.id === "notion" && <ProviderStep id="notion" name="Notion" desc="Pages, databases, comments. Public integration." authProvider="notion" connected={!!connected.notion} onConnected={() => markConnected("notion")} />}
-            {step.id === "desktop" && <DesktopStep connected={!!connected.desktop} onConnected={() => markConnected("desktop")} />}
+            {step.id === "cloud" && (
+              <CloudStep
+                provider={session?.provider}
+                connected={!!connected.cloud}
+                onConnected={() => markConnected("cloud")}
+              />
+            )}
+            {step.id === "desktop" && (
+              <DesktopStep
+                connected={!!connected.desktop}
+                onConnected={() => markConnected("desktop")}
+              />
+            )}
             {step.id === "review" && <ReviewStep connected={connected} />}
 
-            {/* Footer controls */}
             <div className="mt-12 flex items-center justify-between gap-3">
               <button
                 onClick={back}
@@ -169,10 +187,10 @@ export default function OnboardingPage() {
               <div className="flex items-center gap-2">
                 {idx < STEPS.length - 1 && (
                   <button
-                    onClick={() => finish(true)}
+                    onClick={next}
                     className="pixel text-[12px] px-4 py-2.5 rounded text-[var(--text-2)] hover:text-white"
                   >
-                    Skip rest →
+                    Skip this step
                   </button>
                 )}
                 {idx < STEPS.length - 1 ? (
@@ -205,13 +223,13 @@ function WelcomeStep({ email }: { email: string }) {
   return (
     <>
       <p className="pixel text-[16px] text-[var(--text-2)] leading-[1.55] mb-8 max-w-[560px]">
-        Signed in as <span className="text-[var(--ember)]">{email}</span>. We&apos;ll walk you through 4 connectors. You can skip any of them — your workspace will just stay smaller.
+        Signed in as <span className="text-[var(--ember)]">{email}</span>. Qyntra can ingest from the provider you approved and from folders you explicitly select.
       </p>
       <div className="grid sm:grid-cols-3 gap-3">
         {[
-          { icon: Shield, title: "Private workspace", body: "Only you can read your data. RLS-enforced." },
-          { icon: Sparkles, title: "Predictive recall", body: "Each connector trains your next-page predictions." },
-          { icon: Check, title: "Skip safely", body: "Demo mode preloads sample data so you can explore." },
+          { icon: Shield, title: "Private workspace", body: "Only your session can read your indexed data." },
+          { icon: Sparkles, title: "Auto ingest", body: "Cloud sync starts only after this consent step." },
+          { icon: Check, title: "Skip safely", body: "You can connect or ingest more from Sources later." },
         ].map((f, i) => (
           <div key={i} className="p-4 rounded border border-[var(--line)] bg-[var(--bg-1)]">
             <f.icon size={16} className="text-[var(--ember)] mb-2" />
@@ -224,68 +242,146 @@ function WelcomeStep({ email }: { email: string }) {
   );
 }
 
-function ProviderStep({
-  id,
-  name,
-  desc,
-  authProvider,
+function CloudStep({
+  provider,
   connected,
   onConnected,
 }: {
-  id: string;
-  name: string;
-  desc: string;
-  authProvider: string;
+  provider?: string;
   connected: boolean;
   onConnected: () => void;
 }) {
-  function handleConnect() {
-    // Hand-off to NextAuth; on return, the provider entry is already linked
-    signIn(authProvider, { callbackUrl: "/onboarding" });
-    onConnected();
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<AutoResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const details = getCloudDetails(provider);
+
+  async function approve() {
+    setLoading(true);
+    setError(null);
+    setResults([]);
+    try {
+      const res = await fetch("/api/ingest/auto", { method: "POST" });
+      const json = await res.json();
+      setResults(json.results || []);
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Auto-ingest failed");
+        return;
+      }
+      onConnected();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <div>
       <p className="pixel text-[15px] text-[var(--text-2)] leading-[1.55] mb-8 max-w-[560px]">
-        {desc}
+        {details.description}
       </p>
       <div className="p-6 rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] flex items-center gap-5">
         <div className="size-16 rounded-lg bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
-          <ConnIcon kind={id} size={36} />
+          {details.icon ? <ConnIcon kind={details.icon} size={36} /> : <Cloud size={30} className="text-[var(--ember)]" />}
         </div>
         <div className="flex-1">
-          <div className="pixel text-[18px] mb-1">{name}</div>
+          <div className="pixel text-[18px] mb-1">{details.title}</div>
           <div className="pixel text-[12px] text-[var(--muted)]">
-            {connected ? "Connected · syncing every 5m" : "OAuth read-only. Disconnect anytime."}
+            {connected ? "Approved and synced" : "Requires your explicit approval."}
           </div>
         </div>
         {connected ? (
           <span className="pixel text-[12px] text-[var(--good)] flex items-center gap-1.5 px-3 py-1.5 rounded border border-[var(--good)]/30 bg-[var(--good)]/10">
-            <Check size={12} /> Connected
+            <Check size={12} /> Synced
           </span>
         ) : (
           <button
-            onClick={handleConnect}
-            className="pixel text-[13px] px-4 py-2.5 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-2"
+            onClick={approve}
+            disabled={loading || !details.supported}
+            className="pixel text-[13px] px-4 py-2.5 rounded bg-[var(--ember)] text-white hover:bg-[var(--ember-2)] flex items-center gap-2 disabled:opacity-50"
           >
-            Connect <ExternalLink size={12} />
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <Shield size={13} />}
+            Allow ingest
           </button>
         )}
       </div>
 
       <div className="mt-6 p-4 rounded border border-dashed border-[var(--line)] text-[12.5px] text-[var(--text-2)] leading-relaxed">
-        <strong className="text-white">What we read:</strong> public profile, posts, and items you explicitly share with this integration. We never write.
+        <strong className="text-white">What we read:</strong> {details.reads}
       </div>
+
+      {results.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {results.map((result) => (
+            <div
+              key={result.provider}
+              className={`p-3 rounded border text-[12px] ${
+                result.error
+                  ? "border-[var(--bad)]/30 bg-[var(--bad)]/5 text-[var(--bad)]"
+                  : "border-[var(--good)]/30 bg-[var(--good)]/5 text-[var(--good)]"
+              }`}
+            >
+              {result.error
+                ? `${result.label}: ${result.error}`
+                : `${result.label}: ${result.inserted || 0} items ingested`}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 p-3 rounded border border-[var(--bad)]/30 bg-[var(--bad)]/5 flex items-start gap-2 text-[12px] text-[var(--bad)]">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {error}
+        </div>
+      )}
     </div>
   );
+}
+
+function getCloudDetails(provider?: string) {
+  if (provider === "google") {
+    return {
+      supported: true,
+      icon: "drive",
+      title: "Google Drive + Gmail",
+      description: "Approve once to ingest your recent Drive files and inbox metadata from the Google account used for sign-in.",
+      reads: "Drive file names, links, modified times, Gmail senders, subjects, dates, and snippets. Qyntra never sends mail or edits files.",
+    };
+  }
+  if (provider === "github") {
+    return {
+      supported: true,
+      icon: "github",
+      title: "GitHub",
+      description: "Approve once to ingest repositories, gists, issues, pull requests, and starred repositories available to this OAuth token.",
+      reads: "Repository metadata, gist metadata, issue and pull request titles and bodies, starred repository metadata. Qyntra never writes to GitHub.",
+    };
+  }
+  if (provider === "notion") {
+    return {
+      supported: true,
+      icon: "notion",
+      title: "Notion",
+      description: "Approve once to ingest pages shared with your Notion integration.",
+      reads: "Page titles, URLs, and last edited times from pages available to the integration. Qyntra never edits Notion.",
+    };
+  }
+  return {
+    supported: false,
+    icon: "",
+    title: "No cloud source available",
+    description: "This sign-in provider does not expose a supported Qyntra ingestion source.",
+    reads: "Nothing is read unless you sign in with Google, GitHub, or Notion, or select a local folder in the desktop step.",
+  };
 }
 
 function DesktopStep({ connected, onConnected }: { connected: boolean; onConnected: () => void }) {
   return (
     <>
       <p className="pixel text-[15px] text-[var(--text-2)] leading-[1.55] mb-6 max-w-[560px]">
-        Grant one-time access to your Desktop or Documents folder. Qyntra scans, parses, and indexes every supported file automatically — no drag-and-drop required.
+        Browser security blocks silent desktop reads. Pick the folder you want Qyntra to scan, and it will recursively ingest supported text files from that folder.
       </p>
 
       <AutoIngest
@@ -315,7 +411,7 @@ function DesktopStep({ connected, onConnected }: { connected: boolean; onConnect
               href="/files"
               className="pixel text-[11px] px-3 py-1.5 rounded border border-[var(--ember)]/40 text-[var(--ember)] hover:bg-[var(--ember)]/10 inline-flex items-center gap-1.5"
             >
-              Open Files →
+              Open Files <ArrowRight size={11} />
             </Link>
           </div>
         </div>
@@ -330,22 +426,22 @@ function ReviewStep({ connected }: { connected: Record<string, boolean> }) {
     <>
       <p className="pixel text-[16px] text-[var(--text-2)] leading-[1.55] mb-8 max-w-[560px]">
         {count > 0
-          ? `${count} connector${count > 1 ? "s" : ""} linked. Background sync will run automatically every 5 minutes.`
-          : "No connectors linked yet. You can jump in and demo the app, or come back to /sources to add them anytime."}
+          ? `${count} ingest path${count > 1 ? "s" : ""} approved. Background sync will keep OAuth sources current.`
+          : "No ingest paths approved yet. You can enter the workspace now and connect sources later."}
       </p>
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="p-5 rounded-xl border border-[var(--ember)]/40 bg-[var(--ember)]/5">
           <div className="pixel text-[12px] text-[var(--ember)] mb-1">CLEAN WORKSPACE</div>
           <div className="pixel text-[20px] mb-2">Start empty</div>
           <p className="pixel text-[12px] text-[var(--text-2)] leading-relaxed">
-            Files, claims, predictions all zeroed. Populates as your connectors sync.
+            Files, claims, and predictions populate as ingestion completes.
           </p>
         </div>
         <div className="p-5 rounded-xl border border-[var(--gold)]/40 bg-[var(--gold)]/5">
           <div className="pixel text-[12px] text-[var(--gold)] mb-1">DEMO LOADED</div>
           <div className="pixel text-[20px] mb-2">Try with sample data</div>
           <p className="pixel text-[12px] text-[var(--text-2)] leading-relaxed">
-            Toggle &quot;Demo mode&quot; on the dashboard top bar anytime.
+            Toggle demo mode on the dashboard top bar anytime.
           </p>
         </div>
       </div>

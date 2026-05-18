@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-:root {
+:root, :root[data-theme="dark"] {
   --bg: #08090b;
   --bg-1: #0d0e11;
   --bg-2: #14161a;
@@ -22,6 +22,8 @@
   --pixel: "Pixelify Sans", "VT323", "Press Start 2P", ui-monospace, monospace;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 }
+
+/* Light mode removed — dark is the only canonical theme. */
 
 @theme inline {
   --color-bg: var(--bg);

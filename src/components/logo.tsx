@@ -1,19 +1,24 @@
 "use client";
 
-export function Logo({ size = 32, withGlow = false }: { size?: number; withGlow?: boolean }) {
+import Image from "next/image";
+
+export function Logo({ size = 36, withGlow = false }: { size?: number; withGlow?: boolean }) {
+  // Square render box — image is contained inside, no overflow
   const width = size;
-  const height = Math.round(size * (134 / 98));
+  const height = size;
   return (
     <div
-      className={`relative inline-flex items-center justify-center ${withGlow ? "glow-ember" : ""}`}
-      style={{ width, height }}
+      className={`logo-wrap relative inline-flex items-center justify-center ${withGlow ? "glow-ember" : ""}`}
+      style={{ width, height, background: "transparent" }}
     >
-      <img
-        src="/logo.svg"
+      <Image
+        src="/logo.png"
         alt="Qyntra"
         width={width}
         height={height}
-        style={{ imageRendering: "pixelated", display: "block" }}
+        style={{ imageRendering: "pixelated", display: "block", objectFit: "contain", width: "100%", height: "100%" }}
+        priority
+        unoptimized
       />
     </div>
   );

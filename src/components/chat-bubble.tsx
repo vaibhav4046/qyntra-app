@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, X, Send, Sparkles, Loader2 } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
+import { Logo } from "./logo";
 
 interface Msg {
   role: "user" | "assistant";
@@ -85,11 +86,9 @@ export function ChatBubble() {
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--line)] bg-[var(--bg)]/60">
               <div className="flex items-center gap-3">
-                <div className="size-8 rounded-md bg-gradient-to-br from-[var(--ember)] to-[var(--gold)] flex items-center justify-center">
-                  <Sparkles size={14} className="text-white" />
-                </div>
+                <Logo size={26} />
                 <div>
-                  <div className="text-[14px] font-semibold">Qyntra Chat</div>
+                  <div className="text-[14px] font-semibold">Qyntra</div>
                   <div className="mono cap text-[9px] text-[var(--good)]">GROQ · LLAMA 3.3 70B · LIVE</div>
                 </div>
               </div>

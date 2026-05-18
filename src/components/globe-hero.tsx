@@ -21,7 +21,7 @@ function fibonacciSphere(n: number, radius = 2.4) {
 
 const FILE_LABELS = [
   "RAG", "Notion", "Drive", "Gmail", "Standup", "Resume", "Q4 Roadmap",
-  "GraphRAG", "Embeddings", "Vector DB", "HyDE", "BM25", "Slack",
+  "GraphRAG", "Embeddings", "Vector DB", "HyDE", "BM25", "GitHub",
   "Inbox", "Hackathon", "Voyage 3", "pgvector", "Pinecone", "Cross-Encoder",
   "ArXiv", "Microsoft", "Memory", "Agent", "MRR", "WikiThon", "Reranking",
   "Hybrid", "Dense", "Sparse", "Compile", "Predict", "Cite",
@@ -151,7 +151,7 @@ export function GlobeHero() {
           <ConnIcon kind="drive" size={14} />
           <ConnIcon kind="notion" size={14} />
           <ConnIcon kind="gmail" size={14} />
-          <ConnIcon kind="slack" size={14} />
+          <ConnIcon kind="desktop" size={14} />
           <ConnIcon kind="github" size={14} />
         </div>
       </div>

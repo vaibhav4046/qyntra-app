@@ -1,5 +1,6 @@
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 import { runIngest } from "@/lib/ingest";
+import { REMOVED_INGEST_PROVIDERS } from "@/lib/session-ingest";
 
 /**
  * Periodic re-sync cron.
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
 
   for (const row of rows) {
     if (!row.access_token) continue;
+    if (REMOVED_INGEST_PROVIDERS.has(row.provider)) continue;
     try {
       const r = await runIngest(row.provider, row.access_token, row.user_id);
       results.push({ user_id: row.user_id, provider: row.provider, inserted: r.inserted });

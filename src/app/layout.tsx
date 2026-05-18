@@ -17,6 +17,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&family=VT323&display=swap"
           rel="stylesheet"
         />
+        <script
+          // Avoid flash of unstyled theme. Read once before paint.
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('qyntra:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}`,
+          }}
+        />
       </head>
       <body className="grain scanlines">
         <Providers>{children}</Providers>

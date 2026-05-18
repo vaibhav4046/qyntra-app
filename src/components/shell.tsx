@@ -6,19 +6,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ConnIcon } from "./conn-icon";
 import { useConnectorStore } from "@/lib/connector-store";
 import type { QConnector } from "@/lib/data";
-import { Home, Network, MessageSquare, BookOpen, FileText, Plug, Search, Command, Boxes, LogOut, Menu, X } from "lucide-react";
+import { Home, MessageSquare, BookOpen, FileText, Plug, Search, Command, Boxes, LogOut, Menu, X } from "lucide-react";
 import { Logo } from "./logo";
+import { SearchPopover } from "./search-popover";
+import { AvatarMenu } from "./avatar-menu";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState, useCallback } from "react";
 
 const ROUTES = [
   { href: "/home", label: "Dashboard", icon: Home, k: "1" },
-  { href: "/map", label: "Knowledge Map", icon: Network, k: "2", badge: "NEW" },
-  { href: "/map-3d", label: "3D Galaxy", icon: Boxes, k: "3", badge: "BETA" },
-  { href: "/ask", label: "Ask", icon: MessageSquare, k: "4" },
-  { href: "/read", label: "Read", icon: BookOpen, k: "5" },
-  { href: "/files", label: "Files", icon: FileText, k: "6" },
-  { href: "/sources", label: "Sources", icon: Plug, k: "7" },
+  { href: "/map-3d", label: "3D Galaxy", icon: Boxes, k: "2", badge: "BETA" },
+  { href: "/ask", label: "Ask", icon: MessageSquare, k: "3" },
+  { href: "/read", label: "Read", icon: BookOpen, k: "4" },
+  { href: "/files", label: "Files", icon: FileText, k: "5" },
+  { href: "/sources", label: "Sources", icon: Plug, k: "6" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -54,7 +55,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Menu size={18} />
           </button>
           <Link href="/" className="flex items-center gap-2.5 flex-shrink-0">
-            <Logo size={26} withGlow />
+            <Logo size={32} withGlow />
             <span className="mono cap text-[12px] font-semibold hidden sm:inline">QYNTRA::WIKI</span>
           </Link>
           <nav className="hidden lg:flex items-center gap-1 ml-3">
@@ -78,21 +79,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
 
-        {/* Search: desktop inline, mobile collapsible */}
+        {/* Search: desktop inline (with results popover), mobile collapsible */}
         <div className="hidden md:block flex-1 max-w-[520px] mx-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--bg-1)] border border-[var(--line)] focus-within:border-[var(--ember)]/50 transition">
-            <Search size={14} className="text-[var(--muted)]" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearch}
-              placeholder="ask, find, jump — press Enter"
-              className="bg-transparent flex-1 outline-none text-[13px] placeholder:text-[var(--muted)] min-w-0"
-            />
-            <kbd className="mono text-[10px] px-1.5 py-0.5 rounded border border-[var(--line)] text-[var(--muted)]">
-              <Command size={9} className="inline" /> K
-            </kbd>
-          </div>
+          <SearchPopover />
         </div>
         <button
           onClick={() => setSearchOpen((o) => !o)}
@@ -110,19 +99,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <span className="size-1.5 rounded-full bg-[var(--ember)]" /> HYDRA
           </div>
           {session?.user ? (
-            <div className="flex items-center gap-1.5">
-              <div className="size-8 rounded-full bg-gradient-to-br from-[var(--ember)] to-[var(--gold)] flex items-center justify-center text-[11px] font-semibold" title={session.user.email || ""}>
-                {session.user.name?.[0]?.toUpperCase() || session.user.email?.[0]?.toUpperCase() || "U"}
-              </div>
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="p-1.5 rounded hover:bg-[var(--bg-1)] text-[var(--muted)] hover:text-[var(--text)] transition"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
+            <AvatarMenu />
           ) : (
             <Link href="/signin" className="size-8 rounded-full bg-gradient-to-br from-[var(--ember)] to-[var(--gold)] flex items-center justify-center text-[11px] font-semibold">
               ?
@@ -248,11 +225,15 @@ function SidebarBody({ connectors, pathname }: { connectors: QConnector[]; pathn
         Sources <span>{connectors.filter((c) => c.on).length}</span>
       </div>
       {connectors.map((c) => (
-        <div key={c.id} className="flex items-center gap-3 px-3 py-1.5 rounded text-[12px] text-[var(--text-2)] hover:bg-[var(--bg-1)] cursor-pointer">
+        <Link
+          key={c.id}
+          href={`/sources?connector=${c.id}`}
+          className="flex items-center gap-3 px-3 py-1.5 rounded text-[12px] text-[var(--text-2)] hover:bg-[var(--bg-1)] hover:text-[var(--text)] cursor-pointer transition"
+        >
           <ConnIcon kind={c.icon} size={14} />
           <span className="flex-1 truncate">{c.name}</span>
           <span className={`size-1.5 rounded-full ${c.on ? "bg-[var(--good)]" : "bg-[var(--muted)]"}`} />
-        </div>
+        </Link>
       ))}
     </>
   );

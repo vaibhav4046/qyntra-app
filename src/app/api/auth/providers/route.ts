@@ -1,9 +1,5 @@
 export async function GET() {
-  /* Auth-providers endpoint: returns only the providers shown on /signin.
-   * Ingestion-only providers (LinkedIn, Slack) are kept in auth.ts
-   * so /sources can still call signIn() for token exchange, but they are
-   * hidden from the sign-in UI.
-   */
+  // Auth providers shown on /signin and /signup.
   const configured: { id: string; name: string }[] = [];
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {

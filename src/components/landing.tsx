@@ -34,7 +34,7 @@ export function Landing() {
           <Logo size={32} withGlow />
           <span className="pixel text-[18px] font-semibold tracking-tight">Qyntra</span>
           <span className="pixel text-[12px] px-2.5 py-0.5 rounded border border-[var(--ember)]/30 text-[var(--ember)] bg-[var(--ember)]/5">
-            private beta · wikithon &apos;26
+            WikiThon &apos;26 Build
           </span>
         </div>
         <div className="hidden md:flex items-center gap-9 pixel text-[14px] text-[var(--text-2)]">
@@ -77,7 +77,7 @@ export function Landing() {
               transition={{ delay: 0.6, duration: 0.6 }}
               className="pixel text-[15px] text-[var(--ember)]/80 mb-10"
             >
-              Native connectors live: Drive, Notion, Slack, Gmail, GitHub, and more →
+              Native connectors live: Drive, Notion, Gmail, GitHub, Desktop, and more
             </motion.div>
 
             <h1 className="pixel text-[36px] sm:text-[48px] md:text-[60px] lg:text-[72px] leading-[1.02] font-normal tracking-tight">
@@ -174,7 +174,7 @@ export function Landing() {
         </div>
         <div className="grid md:grid-cols-3 gap-4">
           {[
-            { icon: Layers, n: "01", t: "Collect", b: "Plug in every source you trust. Drive, Notion, LinkedIn, Gmail, Slack, GitHub, arXiv and your desktop. Local-first.", tags: ["DRIVE", "NOTION", "LINKEDIN", "GMAIL", "DESKTOP"] },
+            { icon: Layers, n: "01", t: "Collect", b: "Plug in every source you trust. Drive, Notion, Gmail, GitHub, arXiv and your desktop. Local-first.", tags: ["DRIVE", "NOTION", "GMAIL", "GITHUB", "DESKTOP"] },
             { icon: Network, n: "02", t: "Connect", b: "A retrieval-augmented compiler extracts atomic facts, links them to entities, and rebuilds your wiki page-by-page.", tags: ["PAGES", "ENTITIES", "CLAIMS", "CITATIONS"] },
             { icon: Brain, n: "03", t: "Recall", b: "An interactive 3D galaxy for exploring, a chat for direct answers, and a predictive rail that surfaces what you'll need next.", tags: ["MAP", "ASK", "READ", "PREDICT"] },
           ].map((s, i) => (
@@ -208,12 +208,15 @@ export function Landing() {
       {/* Sources */}
       <section id="sources" className="max-w-[1400px] mx-auto px-10 py-32">
         <div className="mb-12">
-          <div className="pixel text-[15px] text-[var(--ember)] mb-4">Connectors · 8 sources</div>
+          <div className="pixel text-[15px] text-[var(--ember)] mb-4">Connectors · {CONNECTORS.length} sources</div>
           <h2 className="pixel text-[56px] font-normal leading-[1.05] tracking-tight text-white">
             Plug in everywhere you
             <br />
             <span className="text-[var(--ember)]">already remember.</span>
           </h2>
+          <p className="pixel text-[14px] text-[var(--text-2)] mt-4">
+            Connect once. Qyntra does the rest.
+          </p>
         </div>
         <div className="grid md:grid-cols-4 gap-3">
           {CONNECTORS.map((c, i) => (
@@ -229,7 +232,7 @@ export function Landing() {
               <ConnIcon kind={c.icon} size={28} />
               <div>
                 <div className="pixel text-[16px] text-white">{c.name}</div>
-                <div className="pixel text-[12px] text-[var(--muted)]">{c.on ? "SYNCED" : "OFFLINE"}</div>
+                <div className="pixel text-[12px] text-[var(--ember)]/80">READY</div>
               </div>
             </motion.div>
           ))}

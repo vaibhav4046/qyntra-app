@@ -36,7 +36,7 @@ export interface QConnector {
   count: number;
   on: boolean;
   color: string;
-  provider?: "google" | "notion" | "slack" | "github" | "linkedin" | "local";
+  provider?: "google" | "notion" | "github" | "local";
 }
 
 export const NODES: QNode[] = [
@@ -49,7 +49,7 @@ export const NODES: QNode[] = [
   { id: "standup", type: "doc", label: "Standup Oct 24", size: "sm", x: 0.5, y: 0.18, z: 0.4, summary: "Daily standup notes.", source: "Drive", sourceUrl: "https://drive.google.com/file/d/standup-oct24", lastSync: "yesterday", preview: "Blockers: HydraDB auth flow, schema decisions on graph edges.", tags: ["standup"], kind: "DOC" },
   { id: "roadmap", type: "doc", label: "Q4 Roadmap", size: "md", x: 0.62, y: 0.2, z: -0.3, summary: "Themes: ingestion, reasoning, publishing.", source: "Drive", sourceUrl: "https://drive.google.com/file/d/q4-roadmap", lastSync: "2h ago", tags: ["planning"], kind: "DOC" },
   { id: "hackathon", type: "doc", label: "WikiThon Brief", size: "sm", x: 0.42, y: 0.08, z: 0.1, summary: "Build a personalized wiki on private data.", source: "Gmail", sourceUrl: "https://mail.google.com/mail/u/0/#inbox/wikithon", lastSync: "3d ago", tags: ["hackathon"], kind: "DOC" },
-  { id: "resume", type: "doc", label: "Resume V. Lalwa", size: "sm", x: 0.86, y: 0.3, z: 0.25, summary: "LinkedIn profile.", source: "LinkedIn", sourceUrl: "https://www.linkedin.com/in/vaibhav-lalwa/", lastSync: "1w ago", tags: ["profile"], kind: "DOC" },
+  { id: "resume", type: "doc", label: "Resume V. Lalwa", size: "sm", x: 0.86, y: 0.3, z: 0.25, summary: "Desktop-imported profile.", source: "Desktop", lastSync: "1w ago", tags: ["profile"], kind: "DOC" },
   { id: "inbox", type: "doc", label: "Inbox digest", size: "sm", x: 0.88, y: 0.74, z: -0.15, summary: "14 newsletters parsed.", source: "Gmail", sourceUrl: "https://mail.google.com/mail/u/0/", lastSync: "1h ago", tags: ["inbox"], kind: "DOC" },
   { id: "eVec", type: "entity", label: "pgvector", size: "sm", x: 0.16, y: 0.3, z: 0.35, summary: "Postgres extension for vector similarity.", kind: "ENTITY", tags: ["db"] },
   { id: "ePine", type: "entity", label: "Pinecone", size: "sm", x: 0.1, y: 0.46, z: -0.4, summary: "Managed vector DB.", kind: "ENTITY", tags: ["db"] },
@@ -116,9 +116,7 @@ export const TYPE_COLOR: Record<NodeType, string> = {
 export const CONNECTORS: QConnector[] = [
   { id: "drive", name: "Google Drive", icon: "drive", count: 142, on: true, color: "#4285F4", provider: "google" },
   { id: "notion", name: "Notion", icon: "notion", count: 88, on: true, color: "#ffffff", provider: "notion" },
-  { id: "linkedin", name: "LinkedIn", icon: "linkedin", count: 6, on: true, color: "#0A66C2", provider: "linkedin" },
   { id: "gmail", name: "Gmail", icon: "gmail", count: 312, on: true, color: "#EA4335", provider: "google" },
-  { id: "slack", name: "Slack", icon: "slack", count: 904, on: false, color: "#E01E5A", provider: "slack" },
   { id: "desktop", name: "Desktop", icon: "desktop", count: 23, on: true, color: "#cdd0d8", provider: "local" },
   { id: "github", name: "GitHub", icon: "github", count: 41, on: true, color: "#ffffff", provider: "github" },
   { id: "arxiv", name: "arXiv", icon: "arxiv", count: 9, on: true, color: "#B31B1B" },
@@ -127,7 +125,7 @@ export const CONNECTORS: QConnector[] = [
 export const ACTIVITY = [
   { color: "ember", t: "2m ago", text: "Compiled RAG Pipelines from 7 sources — 23 new claims, 8 verified" },
   { color: "gold", t: "14m ago", text: "Contradiction flagged on Embedding Models — Voyage vs OpenAI" },
-  { color: "teal", t: "1h ago", text: "Imported 42 messages from Slack #wikithon" },
+  { color: "teal", t: "1h ago", text: "Imported 42 GitHub issues and gists" },
   { color: "violet", t: "3h ago", text: "New entity linked: HyDE ⇄ Cross-Encoder Reranking" },
   { color: "ember", t: "yesterday", text: "Published draft of Agent Memory to private wiki" },
 ];
@@ -140,9 +138,9 @@ export const FILES_SEED = [
   { id: "acme", kind: "EMAIL", title: "Customer call · Acme Corp", sub: "Q&A on hybrid retrieval rollout timeline.", tags: ["call", "sales"], source: "Gmail" },
   { id: "spec", kind: "DOC", title: "Spec · Predictive rail v2", sub: "Design doc for next-page prediction confidence.", tags: ["design"], source: "Notion" },
   { id: "deck", kind: "SLIDES", title: "Hackathon pitch deck", sub: "Slides for WikiThon final demo.", tags: ["hackathon"], source: "Drive" },
-  { id: "resume", kind: "PROFILE", title: "Resume — V. Lalwa", sub: "LinkedIn-imported profile, regenerated weekly.", tags: ["profile"], source: "LinkedIn" },
+  { id: "resume", kind: "PROFILE", title: "Resume - V. Lalwa", sub: "Desktop-imported profile, regenerated weekly.", tags: ["profile"], source: "Desktop" },
   { id: "graphPdf", kind: "PDF", title: "arXiv · GraphRAG paper", sub: "Microsoft Research, 2404.xxxx", tags: ["paper"], source: "arXiv" },
-  { id: "wikithon", kind: "THREAD", title: "Slack #wikithon", sub: "42 messages this week, 3 contradictions flagged.", tags: ["team"], source: "Slack" },
+  { id: "wikithon", kind: "ISSUE", title: "GitHub #wikithon", sub: "42 issues this week, 3 contradictions flagged.", tags: ["team"], source: "GitHub" },
   { id: "pgvector", kind: "ENTITY", title: "pgvector", sub: "Postgres extension for vector similarity.", tags: ["db"], source: "Wiki" },
   { id: "hybrid", kind: "CLAIM", title: "Hybrid retrieval beats dense-only by 18%", sub: "Across 6 internal eval sets.", tags: ["eval"], source: "Claim" },
 ];

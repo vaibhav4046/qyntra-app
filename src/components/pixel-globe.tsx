@@ -98,7 +98,7 @@ const LABELED_NODES = [
   { label: "Gmail", pos: [-0.5, -1.8, 0.8] as [number, number, number], color: "#ffc15c" },
   { label: "Voyage 3", pos: [0.6, -1.2, -1.6] as [number, number, number], color: "#a87bff" },
   { label: "GitHub", pos: [-1.5, -0.8, -1.0] as [number, number, number], color: "#ffffff" },
-  { label: "Slack", pos: [0.4, 1.9, -0.5] as [number, number, number], color: "#ffc15c" },
+  { label: "Desktop", pos: [0.4, 1.9, -0.5] as [number, number, number], color: "#ffc15c" },
 ];
 
 function FileNodes({ onHover }: { onHover: (i: number | null) => void }) {

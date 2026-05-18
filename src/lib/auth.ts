@@ -1,30 +1,22 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
-import LinkedIn from "next-auth/providers/linkedin";
 import Notion from "next-auth/providers/notion";
+import Credentials from "next-auth/providers/credentials";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
+import { verifyMagicToken } from "@/lib/magic-link";
 
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
     refreshToken?: string;
     provider?: string;
-    expiresAt?: number; // unix timestamp (seconds)
+    expiresAt?: number;
     user: DefaultSession["user"] & { id?: string };
   }
 }
 
 const providers = [];
-
-/* ─── PROVIDER SPLIT ───
- * SIGN-IN  → GitHub, Notion  (primary identity providers)
- * INGESTION → Google, LinkedIn, GitHub, Notion, Slack
- *   - Google & LinkedIn stay in auth.ts so /sources can call signIn()
- *     to exchange tokens for Drive/Gmail/Profile ingestion.
- *   - Slack is excluded from auth.ts because user tokens expire in ~12 hours.
- *     Slack uses a custom OAuth flow via /api/connectors/slack/*
- */
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
@@ -48,15 +40,11 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
     GitHub({
       clientId: process.env.GITHUB_ID,
       clientSecret: process.env.GITHUB_SECRET,
-    })
-  );
-}
-
-if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
-  providers.push(
-    LinkedIn({
-      clientId: process.env.LINKEDIN_CLIENT_ID,
-      clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
+      authorization: {
+        params: {
+          scope: "read:user user:email repo gist read:org",
+        },
+      },
     })
   );
 }
@@ -71,14 +59,48 @@ if (process.env.NOTION_CLIENT_ID && process.env.NOTION_CLIENT_SECRET) {
   );
 }
 
+// Magic-link Credentials provider — always enabled. Authenticates via signed token.
+providers.push(
+  Credentials({
+    id: "magic",
+    name: "Magic Link",
+    credentials: {
+      token: { label: "Magic token", type: "text" },
+    },
+    async authorize(creds) {
+      const token = creds?.token;
+      if (!token || typeof token !== "string") return null;
+      const payload = verifyMagicToken(token);
+      if (!payload) return null;
+      const id = `email:${Buffer.from(payload.email).toString("hex").slice(0, 32)}`;
+      // Best-effort: ensure profile row exists
+      if (hasSupabase()) {
+        try {
+          const sb = supabaseAdmin();
+          await sb.from("profiles").upsert(
+            { id, email: payload.email, name: payload.name || null, provider: "email" },
+            { onConflict: "id" }
+          );
+        } catch {}
+      }
+      return {
+        id,
+        email: payload.email,
+        name: payload.name || null,
+      };
+    },
+  })
+);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   providers,
   session: { strategy: "jwt" },
   callbacks: {
     async signIn({ user, account, profile }) {
-      // Upsert profile row in Supabase on every sign-in
       if (!hasSupabase() || !account || !user.email) return true;
+      // Credentials/magic provider already upserted in authorize()
+      if (account.provider === "magic") return true;
       try {
         const id = `${account.provider}:${account.providerAccountId}`;
         const sb = supabaseAdmin();
@@ -102,8 +124,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.provider = account.provider;
-        token.uid = `${account.provider}:${account.providerAccountId}`;
-        // expires_at comes as seconds from some providers; normalize
+        if (account.provider === "magic" && user?.id) {
+          token.uid = user.id as string;
+        } else {
+          token.uid = `${account.provider}:${account.providerAccountId}`;
+        }
         token.expiresAt = account.expires_at ?? undefined;
       }
       if (user) {
@@ -122,7 +147,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async redirect({ url, baseUrl }) {
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       if (new URL(url).origin === baseUrl) return url;
-      return baseUrl + "/onboarding";
+      return `${baseUrl}/onboarding`;
     },
   },
   pages: { signIn: "/signin" },

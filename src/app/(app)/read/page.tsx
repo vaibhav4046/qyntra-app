@@ -42,7 +42,7 @@ export default function ReadPage() {
   if (!node) return null;
 
   return (
-    <div className="grid grid-cols-[260px_1fr_320px] h-full overflow-hidden">
+    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_320px] h-full overflow-hidden">
       {/* Trail */}
       <aside className="border-r border-[var(--line)] bg-[var(--bg)] p-5 overflow-y-auto">
         <div className="mono cap text-[10px] text-[var(--muted)] mb-3">Exploration · {trail.length} hops</div>
@@ -74,7 +74,7 @@ export default function ReadPage() {
       </aside>
 
       {/* Article */}
-      <article className="overflow-y-auto px-10 py-8">
+      <article className="overflow-y-auto px-4 sm:px-10 py-8 min-w-0 break-words">
         <div className="max-w-[720px] mx-auto">
           <div className="mono cap text-[10px] text-[var(--ember)] mb-3">{article.kind}</div>
           <motion.h1

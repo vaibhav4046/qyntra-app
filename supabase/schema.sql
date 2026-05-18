@@ -16,7 +16,7 @@ create table if not exists public.profiles (
   email text unique,
   name text,
   image text,
-  provider text,                        -- google | notion | github | slack | linkedin
+  provider text,                        -- google | notion | github
   demo_mode boolean default false,      -- when true, /api/chat falls back to demo data
   onboarded boolean default false,      -- skipped or completed wizard
   created_at timestamptz default now(),
@@ -29,7 +29,7 @@ create table if not exists public.profiles (
 create table if not exists public.connectors (
   id uuid primary key default uuid_generate_v4(),
   user_id text references public.profiles(id) on delete cascade,
-  provider text not null,               -- drive | notion | gmail | slack | github | linkedin | desktop | arxiv
+  provider text not null,               -- drive | notion | gmail | github | desktop | arxiv
   is_on boolean default false,
   access_token text,                    -- encrypted via Vault (use Supabase Vault in prod)
   refresh_token text,
@@ -45,7 +45,7 @@ create table if not exists public.connectors (
 create table if not exists public.files (
   id uuid primary key default uuid_generate_v4(),
   user_id text references public.profiles(id) on delete cascade,
-  source text not null,                 -- drive | notion | gmail | slack | github | linkedin | desktop | manual
+  source text not null,                 -- drive | notion | gmail | github | desktop | manual
   source_id text,                       -- external id from provider
   source_url text,
   kind text default 'DOC',              -- PAGE | DOC | ENTITY | CLAIM | EMAIL | THREAD

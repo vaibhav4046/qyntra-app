@@ -1,11 +1,23 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Send, Sparkles, Loader2, Globe, Database, Files as FilesIcon } from "lucide-react";
+import {
+  Send,
+  Sparkles,
+  Loader2,
+  Globe,
+  Database,
+  Files as FilesIcon,
+  Plus,
+  Trash2,
+  ChevronDown,
+  Shield,
+  Zap,
+  MessageSquare,
+} from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
-
-interface Msg { role: "user" | "assistant"; content: string; }
+import { useChatStore } from "@/lib/chat-store";
 
 const SUGGESTIONS = [
   "Summarize what I've learned about retrieval this quarter",
@@ -13,45 +25,76 @@ const SUGGESTIONS = [
   "Draft a GraphRAG comparison page",
   "What should I read next?",
   "Organize my Drive files by project",
-  "Which slack threads are unread but important?",
+  "Which GitHub issues need attention?",
 ];
 
 export default function AskPage() {
-  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [mode, setMode] = useState<"DEEP" | "WEB">("DEEP");
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const [seedConsumed, setSeedConsumed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { demoMode, init } = useProfileStore();
-  useEffect(() => { init(); }, [init]);
+  const { demoMode, init: initProfile } = useProfileStore();
+  const {
+    conversations,
+    activeId,
+    permissionMode,
+    init: initChats,
+    newChat,
+    selectChat,
+    pushMessage,
+    updateAssistant,
+    deleteChat,
+    setPermissionMode,
+  } = useChatStore();
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    initProfile();
+    initChats();
+  }, [initProfile, initChats]);
 
-  async function send() {
-    if (!input.trim() || streaming) return;
-    const userMsg: Msg = { role: "user", content: input };
-    const next = [...messages, userMsg];
-    setMessages(next);
+  // Auto-fire seeded query from /ask?q=
+  useEffect(() => {
+    if (typeof window === "undefined" || seedConsumed) return;
+    const sp = new URLSearchParams(window.location.search);
+    const q = sp.get("q");
+    if (!q) return;
+    setSeedConsumed(true);
+    newChat();
+    setInput(q);
+    // clear ?q= so refresh doesn't re-fire
+    window.history.replaceState({}, "", "/ask");
+    setTimeout(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>('textarea');
+      if (ta) {
+        ta.value = q;
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      // Trigger send after a tick
+      setTimeout(() => sendSeeded(q), 80);
+    }, 30);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedConsumed]);
+
+  async function sendSeeded(userText: string) {
+    if (streaming) return;
     setInput("");
+    pushMessage({ role: "user", content: userText });
+    pushMessage({ role: "assistant", content: "" });
     setStreaming(true);
-    setMessages([...next, { role: "assistant", content: "" }]);
-
+    const history = [{ role: "user" as const, content: userText }];
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, demoMode }),
+        body: JSON.stringify({ messages: history, demoMode, permissionMode }),
       });
-
       if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({ error: "Request failed" }));
-        setMessages([...next, { role: "assistant", content: `[Error] ${err.error || res.statusText}` }]);
+        updateAssistant(`[Error] ${res.statusText}`);
         setStreaming(false);
         return;
       }
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
@@ -59,31 +102,199 @@ export default function AskPage() {
         const { value, done } = await reader.read();
         if (done) break;
         acc += decoder.decode(value, { stream: true });
-        setMessages([...next, { role: "assistant", content: acc }]);
+        updateAssistant(acc);
       }
     } catch (err) {
-      setMessages([...next, { role: "assistant", content: `[Error] ${(err as Error).message}` }]);
+      updateAssistant(`[Error] ${(err as Error).message}`);
+    } finally {
+      setStreaming(false);
+    }
+  }
+
+  const active = useMemo(
+    () => conversations.find((c) => c.id === activeId) || null,
+    [conversations, activeId]
+  );
+  const messages = active?.messages || [];
+
+  // Auto-scroll on new messages unless user scrolled up
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (nearBottom) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages]);
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollDown(distFromBottom > 300);
+  }
+
+  function scrollToBottom() {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+
+  async function send() {
+    if (!input.trim() || streaming) return;
+    const userText = input;
+    setInput("");
+    if (!activeId) newChat();
+    pushMessage({ role: "user", content: userText });
+    pushMessage({ role: "assistant", content: "" });
+    setStreaming(true);
+
+    const history = [
+      ...(active?.messages || []),
+      { role: "user" as const, content: userText },
+    ];
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history, demoMode, permissionMode }),
+      });
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: "Request failed" }));
+        updateAssistant(`[Error] ${err.error || res.statusText}`);
+        setStreaming(false);
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        updateAssistant(acc);
+      }
+    } catch (err) {
+      updateAssistant(`[Error] ${(err as Error).message}`);
     } finally {
       setStreaming(false);
     }
   }
 
   return (
-    <div className="h-full grid grid-cols-[1fr_320px] overflow-hidden">
-      <div className="flex flex-col">
-        <div className="px-10 py-6 border-b border-[var(--line)]">
-          <div className="mono cap text-[11px] text-[var(--ember)] mb-2">Surface 02 · Ask your wiki</div>
-          <h1 className="text-[28px] font-bold tracking-tight">What do you want to remember today?</h1>
+    <div className="h-full grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] overflow-hidden">
+      {/* Conversation history rail */}
+      <aside className="hidden lg:flex flex-col border-r border-[var(--line)] bg-[var(--bg)] overflow-hidden">
+        <div className="p-3 border-b border-[var(--line)]">
+          <button
+            onClick={() => newChat()}
+            className="w-full px-3 py-2.5 rounded-md bg-[var(--ember)] text-white pixel text-[12px] flex items-center justify-center gap-2 hover:bg-[var(--ember-2)] transition"
+          >
+            <Plus size={13} /> New chat
+          </button>
+        </div>
+        <div className="px-3 py-2 mono cap text-[10px] text-[var(--muted)]">
+          Recent · {conversations.length}
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
+          {conversations.length === 0 && (
+            <div className="px-3 py-6 text-center pixel text-[11px] text-[var(--muted)]">
+              No conversations yet.
+              <br />
+              Click <strong className="text-[var(--ember)]">New chat</strong> to start.
+            </div>
+          )}
+          {conversations.map((c) => {
+            const active = c.id === activeId;
+            return (
+              <div
+                key={c.id}
+                onClick={() => selectChat(c.id)}
+                className={`group flex items-center gap-2 px-3 py-2 rounded cursor-pointer transition ${
+                  active
+                    ? "bg-[var(--ember)]/10 border-l-2 border-[var(--ember)] text-[var(--ember)]"
+                    : "hover:bg-[var(--bg-1)] text-[var(--text-2)] border-l-2 border-transparent"
+                }`}
+              >
+                <MessageSquare size={13} className="flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12.5px] truncate">{c.title || "Untitled"}</div>
+                  <div className="mono text-[9px] text-[var(--muted)]">
+                    {new Date(c.updatedAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteChat(c.id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-[var(--bad)] transition"
+                  aria-label="Delete"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Main chat */}
+      <div className="flex flex-col min-w-0 relative">
+        <div className="px-6 sm:px-10 py-5 border-b border-[var(--line)] flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mono cap text-[11px] text-[var(--ember)] mb-1">Surface 02 · Ask your wiki</div>
+            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight truncate">
+              {active?.title && active.messages.length > 0 ? active.title : "What do you want to remember today?"}
+            </h1>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => newChat()}
+              className="lg:hidden p-2 rounded border border-[var(--line)] hover:bg-[var(--bg-1)]"
+              aria-label="New chat"
+            >
+              <Plus size={14} />
+            </button>
+            <button
+              onClick={() => setPermissionMode(permissionMode === "ask" ? "auto" : "ask")}
+              className={`pixel text-[10px] px-3 py-2 rounded border flex items-center gap-1.5 transition ${
+                permissionMode === "auto"
+                  ? "bg-[var(--bad)]/10 text-[var(--bad)] border-[var(--bad)]/40"
+                  : "bg-[var(--good)]/10 text-[var(--good)] border-[var(--good)]/40"
+              }`}
+              title={
+                permissionMode === "auto"
+                  ? "Auto-approve: agent acts without asking. Risky."
+                  : "Ask first: agent confirms every write."
+              }
+            >
+              {permissionMode === "auto" ? <Zap size={11} /> : <Shield size={11} />}
+              {permissionMode === "auto" ? "BYPASS PERMS" : "ASK FIRST"}
+            </button>
+          </div>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-10 py-8 space-y-6">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="flex-1 overflow-y-auto px-6 sm:px-10 py-8 space-y-6"
+        >
           {messages.length === 0 && (
             <div className="max-w-[640px] mx-auto text-center py-12">
               <Sparkles className="mx-auto text-[var(--ember)] mb-4" size={28} />
               <div className="text-[15px] text-[var(--text-2)] mb-6">
-                Grounded on <strong className="text-[var(--text)]">142 sources</strong>, <strong className="text-[var(--text)]">86 entities</strong>, <strong className="text-[var(--text)]">219 claims</strong> from your private corpus.
+                Grounded on your{" "}
+                <strong className="text-[var(--text)]">Drive, Notion, Gmail, GitHub, Desktop</strong> ingestion.
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
@@ -100,27 +311,43 @@ export default function AskPage() {
           {messages.map((m, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div className={`max-w-[680px] ${m.role === "user" ? "text-right" : ""}`}>
+              <div className={`max-w-[680px] w-full ${m.role === "user" ? "text-right" : ""}`}>
                 <div className="mono cap text-[10px] text-[var(--muted)] mb-1.5">
                   {m.role === "user" ? "YOU" : "QYNTRA · ANSWER"}
                 </div>
-                <div className={`text-[14.5px] leading-relaxed ${
-                  m.role === "user"
-                    ? "inline-block px-5 py-3 rounded-2xl rounded-tr-md bg-[var(--ember)] text-white"
-                    : "px-5 py-4 rounded-2xl rounded-tl-md bg-[var(--bg-1)] border border-[var(--line)] whitespace-pre-wrap"
-                }`}>
-                  {m.content || (streaming && i === messages.length - 1 ? <Loader2 size={14} className="animate-spin" /> : null)}
+                <div
+                  className={`text-[14.5px] leading-relaxed break-words ${
+                    m.role === "user"
+                      ? "inline-block px-5 py-3 rounded-2xl rounded-tr-md bg-[var(--ember)] text-white text-left"
+                      : "px-5 py-4 rounded-2xl rounded-tl-md bg-[var(--bg-1)] border border-[var(--line)] whitespace-pre-wrap"
+                  }`}
+                >
+                  {m.content ||
+                    (streaming && i === messages.length - 1 ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : null)}
                 </div>
               </div>
             </motion.div>
           ))}
         </div>
 
-        <div className="border-t border-[var(--line)] px-10 py-5 bg-[var(--bg)]/60 backdrop-blur-md">
+        {/* Scroll-to-bottom FAB */}
+        {showScrollDown && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute right-6 bottom-[160px] size-10 rounded-full bg-[var(--ember)] text-white flex items-center justify-center shadow-lg hover:bg-[var(--ember-2)] transition glow-ember z-10"
+            aria-label="Scroll to bottom"
+          >
+            <ChevronDown size={18} />
+          </button>
+        )}
+
+        <div className="border-t border-[var(--line)] px-6 sm:px-10 py-4 sm:py-5 bg-[var(--bg)]/60 backdrop-blur-md">
           <div className="max-w-[860px] mx-auto">
             <div className="rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] focus-within:border-[var(--ember)]/40 transition">
               <textarea
@@ -129,15 +356,17 @@ export default function AskPage() {
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
                 placeholder="Ask anything across your wiki…"
                 rows={2}
-                className="w-full bg-transparent outline-none text-[15px] px-5 py-4 resize-none"
+                className="w-full bg-transparent outline-none text-[15px] px-4 sm:px-5 py-3 sm:py-4 resize-none"
                 disabled={streaming}
               />
-              <div className="flex items-center justify-between px-3 pb-3">
-                <div className="flex gap-1">
+              <div className="flex items-center justify-between px-3 pb-3 gap-2 flex-wrap">
+                <div className="flex gap-1 flex-wrap">
                   <button
                     onClick={() => setMode("DEEP")}
                     className={`mono cap text-[10px] px-2.5 py-1.5 rounded flex items-center gap-1.5 transition ${
-                      mode === "DEEP" ? "bg-[var(--ember)]/15 text-[var(--ember)] border border-[var(--ember)]/30" : "text-[var(--muted)] border border-transparent"
+                      mode === "DEEP"
+                        ? "bg-[var(--ember)]/15 text-[var(--ember)] border border-[var(--ember)]/30"
+                        : "text-[var(--muted)] border border-transparent"
                     }`}
                   >
                     <Database size={11} /> DEEP
@@ -145,7 +374,9 @@ export default function AskPage() {
                   <button
                     onClick={() => setMode("WEB")}
                     className={`mono cap text-[10px] px-2.5 py-1.5 rounded flex items-center gap-1.5 transition ${
-                      mode === "WEB" ? "bg-[var(--ember)]/15 text-[var(--ember)] border border-[var(--ember)]/30" : "text-[var(--muted)] border border-transparent"
+                      mode === "WEB"
+                        ? "bg-[var(--ember)]/15 text-[var(--ember)] border border-[var(--ember)]/30"
+                        : "text-[var(--muted)] border border-transparent"
                     }`}
                   >
                     <Globe size={11} /> WEB
@@ -168,29 +399,72 @@ export default function AskPage() {
         </div>
       </div>
 
-      <aside className="border-l border-[var(--line)] bg-[var(--bg-1)] p-6 overflow-y-auto">
-        <div className="mono cap text-[11px] text-[var(--ember)] mb-4 flex items-center gap-2">
-          <Sparkles size={12} /> Predicted Follow-ups
-        </div>
-        <div className="space-y-2">
-          {[
-            { conf: 92, q: "Compare cost: hybrid retrieval at scale" },
-            { conf: 81, q: "Which legal corpus did Voyage win on?" },
-            { conf: 74, q: 'Draft the "GraphRAG vs RAG" page' },
-            { conf: 66, q: "What's contradictory in my retrieval notes?" },
-          ].map((p) => (
-            <button
-              key={p.q}
-              onClick={() => setInput(p.q)}
-              className="w-full text-left p-3 rounded-lg border border-[var(--line)] hover:border-[var(--ember)]/40 hover:bg-[var(--bg-2)] transition group"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <div className="mono text-[9px] text-[var(--gold)]">{p.conf}% MATCH</div>
-                <div className="mono text-[9px] text-[var(--muted)] group-hover:text-[var(--ember)]">↵</div>
-              </div>
-              <div className="text-[12.5px]">{p.q}</div>
-            </button>
-          ))}
+      <aside className="hidden lg:flex flex-col border-l border-[var(--line)] bg-[var(--bg-1)] overflow-y-auto">
+        <div className="p-6">
+          <div className="mono cap text-[11px] text-[var(--ember)] mb-4 flex items-center gap-2">
+            <Sparkles size={12} /> Predicted Follow-ups
+          </div>
+          <div className="space-y-2">
+            {[
+              { conf: 92, q: "Compare cost: hybrid retrieval at scale" },
+              { conf: 81, q: "Which legal corpus did Voyage win on?" },
+              { conf: 74, q: 'Draft the "GraphRAG vs RAG" page' },
+              { conf: 66, q: "What's contradictory in my retrieval notes?" },
+            ].map((p) => (
+              <button
+                key={p.q}
+                onClick={() => setInput(p.q)}
+                className="w-full text-left p-3 rounded-lg border border-[var(--line)] hover:border-[var(--ember)]/40 hover:bg-[var(--bg-2)] transition group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="mono text-[9px] text-[var(--gold)]">{p.conf}% MATCH</div>
+                  <div className="mono text-[9px] text-[var(--muted)] group-hover:text-[var(--ember)]">↵</div>
+                </div>
+                <div className="text-[12.5px]">{p.q}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-[var(--line)]">
+            <div className="mono cap text-[11px] text-[var(--gold)] mb-3 flex items-center gap-2">
+              <Shield size={11} /> Agent permissions
+            </div>
+            <p className="pixel text-[11px] text-[var(--text-2)] leading-relaxed mb-3">
+              Qyntra can read & write your connected files. Pick how much it does on its own:
+            </p>
+            <div className="space-y-1.5">
+              <button
+                onClick={() => setPermissionMode("ask")}
+                className={`w-full text-left p-2.5 rounded border transition ${
+                  permissionMode === "ask"
+                    ? "bg-[var(--good)]/10 border-[var(--good)]/40"
+                    : "border-[var(--line)] hover:bg-[var(--bg-2)]"
+                }`}
+              >
+                <div className="text-[12.5px] flex items-center gap-1.5">
+                  <Shield size={11} className="text-[var(--good)]" /> Ask first (default)
+                </div>
+                <div className="pixel text-[10px] text-[var(--muted)] mt-0.5">
+                  Confirm every write, delete, send.
+                </div>
+              </button>
+              <button
+                onClick={() => setPermissionMode("auto")}
+                className={`w-full text-left p-2.5 rounded border transition ${
+                  permissionMode === "auto"
+                    ? "bg-[var(--bad)]/10 border-[var(--bad)]/40"
+                    : "border-[var(--line)] hover:bg-[var(--bg-2)]"
+                }`}
+              >
+                <div className="text-[12.5px] flex items-center gap-1.5">
+                  <Zap size={11} className="text-[var(--bad)]" /> Auto-approve
+                </div>
+                <div className="pixel text-[10px] text-[var(--muted)] mt-0.5">
+                  Agent acts without confirmation. Use carefully.
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
     </div>

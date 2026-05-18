@@ -6,7 +6,6 @@ const PROTECTED = ["/home", "/ask", "/files", "/sources", "/map", "/map-3d", "/r
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  // Check if path starts with any protected route
   const isProtected = PROTECTED.some(
     (p) => pathname === p || pathname.startsWith(p + "/")
   );

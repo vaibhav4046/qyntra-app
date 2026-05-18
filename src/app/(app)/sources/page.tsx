@@ -22,40 +22,14 @@ export default function SourcesPage() {
   const { connectors: conns, syncing, init, toggle } = useConnectorStore();
   const [syncs, setSyncs] = useState<Record<string, SyncState>>({});
 
-  useEffect(() => { init(); }, [init]);
-
-  // Listen for Slack popup postMessage
   useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      if (e.data?.type === "SLACK_CONNECTED" && e.data.ok) {
-        setSyncs((s) => ({ ...s, slack: { loading: false, message: "Slack connected" } }));
-        // Optimistically flip connector on
-        toggle({ ...conns.find((x) => x.id === "slack")! } as QConnector);
-      }
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [init, conns, toggle]);
+    init();
+  }, [init]);
 
-  async function connectReal(c: QConnector) {
+  function connectReal(c: QConnector) {
     if (c.provider === "google") signIn("google", { callbackUrl: "/sources" });
     else if (c.provider === "notion") signIn("notion", { callbackUrl: "/sources" });
     else if (c.provider === "github") signIn("github", { callbackUrl: "/sources" });
-    else if (c.provider === "linkedin") signIn("linkedin", { callbackUrl: "/sources" });
-    else if (c.provider === "slack") {
-      // Slack is ingestion-only (not sign-in) because user tokens expire in ~12 hours.
-      // Use custom OAuth flow via popup.
-      const popup = window.open("", "slack-oauth", "width=500,height=700");
-      if (!popup) return;
-      const res = await fetch("/api/connectors/slack/start");
-      const json = await res.json();
-      if (json.url) {
-        popup.location.href = json.url;
-      } else {
-        popup.close();
-        setSyncs((s) => ({ ...s, slack: { loading: false, error: json.error || "Slack OAuth not configured" } }));
-      }
-    }
   }
 
   async function syncNow(c: QConnector) {
@@ -67,11 +41,28 @@ export default function SourcesPage() {
         setSyncs((s) => ({ ...s, [c.id]: { loading: false, error: json.error || "Failed" } }));
         return;
       }
-      setSyncs((s) => ({ ...s, [c.id]: { loading: false, count: json.inserted, message: `Synced ${json.inserted} items` } }));
-      // Optimistically bump count in store
+      setSyncs((s) => ({
+        ...s,
+        [c.id]: {
+          loading: false,
+          count: json.inserted,
+          message: `Synced ${json.inserted} items`,
+        },
+      }));
     } catch (err) {
       setSyncs((s) => ({ ...s, [c.id]: { loading: false, error: (err as Error).message } }));
     }
+  }
+
+  function markDesktopIngested(count: number) {
+    setSyncs((s) => ({
+      ...s,
+      desktop: {
+        loading: false,
+        count,
+        message: count > 0 ? `Ingested ${count} desktop files` : "No matching desktop files found",
+      },
+    }));
   }
 
   const onCount = conns.filter((x) => x.on).length;
@@ -79,10 +70,10 @@ export default function SourcesPage() {
   return (
     <div className="p-4 sm:p-8 max-w-[1400px] mx-auto">
       <div className="mb-8">
-        <div className="mono cap text-[11px] text-[var(--ember)] mb-2">Surface 04 · Manage your connectors</div>
+        <div className="mono cap text-[11px] text-[var(--ember)] mb-2">Surface 04 - Manage your connectors</div>
         <h1 className="text-[26px] sm:text-[36px] font-bold tracking-tight leading-tight">Plug in everywhere you already remember.</h1>
         <p className="mono cap text-[11px] text-[var(--muted)] mt-2">
-          CONNECTORS · {onCount} OF {conns.length} ACTIVE · LOCAL-FIRST INGESTION{session?.user && ` · ${session.user.email}`}
+          CONNECTORS - {onCount} OF {conns.length} ACTIVE - LOCAL-FIRST INGESTION{session?.user && ` - ${session.user.email}`}
         </p>
       </div>
 
@@ -108,7 +99,7 @@ export default function SourcesPage() {
                       className="mono cap text-[10px]"
                       style={{ color: syncing[c.id] ? "var(--gold)" : c.on ? "var(--good)" : "var(--muted)" }}
                     >
-                      {syncing[c.id] ? "◌ SYNCING…" : c.on ? `LIVE · ${c.count} ITEMS` : "NOT CONNECTED"}
+                      {syncing[c.id] ? "SYNCING..." : c.on ? `LIVE - ${c.count} ITEMS` : "NOT CONNECTED"}
                     </div>
                   </div>
                 </div>
@@ -131,7 +122,7 @@ export default function SourcesPage() {
                       </button>
                     </>
                   )}
-                  {c.provider === "local" && <AutoIngestButton onComplete={() => syncNow(c)} />}
+                  {c.provider === "local" && <AutoIngestButton onComplete={markDesktopIngested} />}
                   <button
                     onClick={() => toggle(c)}
                     className={`relative w-12 h-6 rounded-full transition ${c.on ? "bg-[var(--ember)]" : "bg-[var(--bg-3)]"}`}

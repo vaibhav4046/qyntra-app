@@ -19,16 +19,10 @@ export interface IngestResult {
   message?: string;
 }
 
-/**
- * Upsert ingested rows into Supabase files table.
- * Dedupes per (user_id, source, source_id).
- */
 export async function ingestRows(rows: IngestRow[]): Promise<number> {
   if (!rows.length) return 0;
   const sb = supabaseAdmin();
-  // Delete existing rows with same (user_id, source, source_id) then insert
-  // Simpler: do best-effort upsert via on_conflict=user_id,source,source_id (would need unique constraint).
-  // Without unique constraint, use a manual dedup: delete then insert in a transaction-ish way.
+
   for (const row of rows) {
     if (row.source_id) {
       await sb
@@ -39,12 +33,12 @@ export async function ingestRows(rows: IngestRow[]): Promise<number> {
         .eq("source_id", row.source_id);
     }
   }
+
   const { error } = await sb.from("files").insert(rows);
   if (error) throw new Error(`Supabase insert failed: ${error.message}`);
   return rows.length;
 }
 
-/** Update connector last_sync + item_count. */
 export async function markConnectorSynced(
   userId: string,
   provider: string,
@@ -65,12 +59,11 @@ export async function markConnectorSynced(
   );
 }
 
-/* ─── PROVIDER ADAPTERS ─── */
-
 interface NotionPageProps {
   title?: { title?: { plain_text: string }[] };
   Name?: { title?: { plain_text: string }[] };
 }
+
 interface NotionPage {
   id: string;
   url: string;
@@ -127,7 +120,13 @@ export async function fetchDriveFiles(token: string, userId: string): Promise<In
     source: "drive",
     source_id: f.id,
     source_url: f.webViewLink,
-    kind: f.mimeType.includes("spreadsheet") ? "SHEET" : f.mimeType.includes("presentation") ? "SLIDES" : f.mimeType.includes("pdf") ? "PDF" : "DOC",
+    kind: f.mimeType.includes("spreadsheet")
+      ? "SHEET"
+      : f.mimeType.includes("presentation")
+      ? "SLIDES"
+      : f.mimeType.includes("pdf")
+      ? "PDF"
+      : "DOC",
     title: f.name,
     last_modified: f.modifiedTime,
     tags: ["drive"],
@@ -137,6 +136,7 @@ export async function fetchDriveFiles(token: string, userId: string): Promise<In
 interface GmailMsg {
   id: string;
 }
+
 interface GmailHeader {
   name: string;
   value: string;
@@ -188,94 +188,143 @@ interface GhRepo {
   language: string | null;
 }
 
-export async function fetchGithubRepos(token: string, userId: string): Promise<IngestRow[]> {
-  const res = await fetch(
-    "https://api.github.com/user/repos?per_page=30&sort=updated",
-    { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } }
-  );
-  if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
-  const repos: GhRepo[] = await res.json();
-  return repos.map((r) => ({
-    user_id: userId,
-    source: "github",
-    source_id: String(r.id),
-    source_url: r.html_url,
-    kind: "REPO",
-    title: r.full_name,
-    summary: r.description || undefined,
-    last_modified: r.updated_at,
-    tags: ["github", r.language || ""].filter(Boolean),
-  }));
-}
-
-interface SlackChannel {
+interface GhGist {
   id: string;
-  name: string;
-  topic?: { value: string };
-  purpose?: { value: string };
-  num_members?: number;
+  description: string | null;
+  html_url: string;
+  updated_at: string;
+  files?: Record<string, { filename?: string; language?: string | null }>;
 }
 
-export async function fetchSlackChannels(token: string, userId: string): Promise<IngestRow[]> {
-  const res = await fetch(
-    "https://slack.com/api/conversations.list?limit=30&exclude_archived=true&types=public_channel",
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (!res.ok) throw new Error(`Slack API ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Slack: ${data.error}`);
-  const channels: SlackChannel[] = data.channels || [];
-  return channels.map((c) => ({
-    user_id: userId,
-    source: "slack",
-    source_id: c.id,
-    source_url: `slack://channel?team=&id=${c.id}`,
-    kind: "THREAD",
-    title: `#${c.name}`,
-    summary: c.purpose?.value || c.topic?.value || undefined,
-    tags: ["slack"],
-  }));
+interface GhIssue {
+  id: number;
+  title: string;
+  body: string | null;
+  html_url: string;
+  updated_at: string;
+  state: string;
+  repository_url?: string;
+  pull_request?: unknown;
 }
 
-interface LinkedInProfile {
-  sub: string;
-  name?: string;
-  email?: string;
-  picture?: string;
-}
-
-export async function fetchLinkedInProfile(token: string, userId: string): Promise<IngestRow[]> {
-  const res = await fetch("https://api.linkedin.com/v2/userinfo", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`LinkedIn API ${res.status}: ${await res.text()}`);
-  const p: LinkedInProfile = await res.json();
-  return [
-    {
-      user_id: userId,
-      source: "linkedin",
-      source_id: p.sub,
-      source_url: "https://www.linkedin.com/in/me",
-      kind: "PROFILE",
-      title: p.name || "LinkedIn profile",
-      summary: p.email,
-      tags: ["linkedin", "profile"],
+async function fetchGithubJson<T>(token: string, path: string): Promise<T> {
+  const res = await fetch(`https://api.github.com${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
     },
-  ];
+  });
+  if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+  return res.json() as Promise<T>;
 }
 
-/** Dispatch by provider. Returns count + (optional) error. */
+function settledArray<T>(result: PromiseSettledResult<T[]>): T[] {
+  return result.status === "fulfilled" ? result.value : [];
+}
+
+export async function fetchGithubData(token: string, userId: string): Promise<IngestRow[]> {
+  const [reposResult, gistsResult, issuesResult, starredResult] = await Promise.allSettled([
+    fetchGithubJson<GhRepo[]>(token, "/user/repos?per_page=50&sort=updated"),
+    fetchGithubJson<GhGist[]>(token, "/gists?per_page=50"),
+    fetchGithubJson<GhIssue[]>(token, "/issues?filter=all&state=all&per_page=50"),
+    fetchGithubJson<GhRepo[]>(token, "/user/starred?per_page=50&sort=updated"),
+  ]);
+
+  const repos = settledArray(reposResult);
+  const gists = settledArray(gistsResult);
+  const issues = settledArray(issuesResult);
+  const starred = settledArray(starredResult);
+  const rows: IngestRow[] = [];
+
+  rows.push(
+    ...repos.map((r) => ({
+      user_id: userId,
+      source: "github",
+      source_id: `repo:${r.id}`,
+      source_url: r.html_url,
+      kind: "REPO",
+      title: r.full_name,
+      summary: r.description || undefined,
+      last_modified: r.updated_at,
+      tags: ["github", "repo", r.language || ""].filter(Boolean),
+    }))
+  );
+
+  rows.push(
+    ...gists.map((g) => {
+      const files = Object.values(g.files || {});
+      const title = g.description || files[0]?.filename || "Untitled gist";
+      return {
+        user_id: userId,
+        source: "github",
+        source_id: `gist:${g.id}`,
+        source_url: g.html_url,
+        kind: "GIST",
+        title,
+        summary: files.map((f) => f.filename).filter(Boolean).join(", ") || undefined,
+        last_modified: g.updated_at,
+        tags: ["github", "gist", files[0]?.language || ""].filter(Boolean),
+      };
+    })
+  );
+
+  rows.push(
+    ...issues.map((i) => ({
+      user_id: userId,
+      source: "github",
+      source_id: `${i.pull_request ? "pr" : "issue"}:${i.id}`,
+      source_url: i.html_url,
+      kind: i.pull_request ? "PULL_REQUEST" : "ISSUE",
+      title: i.title,
+      summary: i.body?.slice(0, 300) || undefined,
+      content: i.body || undefined,
+      last_modified: i.updated_at,
+      tags: ["github", i.pull_request ? "pull-request" : "issue", i.state],
+    }))
+  );
+
+  rows.push(
+    ...starred.map((r) => ({
+      user_id: userId,
+      source: "github",
+      source_id: `starred:${r.id}`,
+      source_url: r.html_url,
+      kind: "STARRED_REPO",
+      title: r.full_name,
+      summary: r.description || undefined,
+      last_modified: r.updated_at,
+      tags: ["github", "starred", r.language || ""].filter(Boolean),
+    }))
+  );
+
+  if (!rows.length) {
+    const firstError = [reposResult, gistsResult, issuesResult, starredResult].find(
+      (result) => result.status === "rejected"
+    ) as PromiseRejectedResult | undefined;
+    if (firstError) throw firstError.reason;
+  }
+
+  return rows;
+}
+
 export async function runIngest(
   provider: string,
   accessToken: string,
   userId: string
 ): Promise<IngestResult> {
   let rows: IngestRow[] = [];
+
   switch (provider) {
     case "notion":
       rows = await fetchNotionPages(accessToken, userId);
       break;
     case "google":
+      rows = [
+        ...(await fetchDriveFiles(accessToken, userId)),
+        ...(await fetchGmailMessages(accessToken, userId)),
+      ];
+      break;
     case "drive":
       rows = await fetchDriveFiles(accessToken, userId);
       break;
@@ -283,17 +332,12 @@ export async function runIngest(
       rows = await fetchGmailMessages(accessToken, userId);
       break;
     case "github":
-      rows = await fetchGithubRepos(accessToken, userId);
-      break;
-    case "slack":
-      rows = await fetchSlackChannels(accessToken, userId);
-      break;
-    case "linkedin":
-      rows = await fetchLinkedInProfile(accessToken, userId);
+      rows = await fetchGithubData(accessToken, userId);
       break;
     default:
       return { inserted: 0, source: provider, message: `Unsupported provider: ${provider}` };
   }
+
   const inserted = await ingestRows(rows);
   await markConnectorSynced(userId, provider, inserted, accessToken);
   return { inserted, source: provider };

@@ -19,7 +19,7 @@ const ALL_PROVIDERS = [
 export function SignInClient() {
   const params = useSearchParams();
   const mode = params.get("mode") === "signup" ? "signup" : "signin";
-  const callbackUrl = params.get("callbackUrl") || "/home";
+  const callbackUrl = params.get("callbackUrl") || "/onboarding";
   const { data: session } = useSession();
   const [configured, setConfigured] = useState<string[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
@@ -47,8 +47,13 @@ export function SignInClient() {
     signIn(providerId, { callbackUrl });
   }
 
-  const availableProviders = ALL_PROVIDERS.filter((p) => configured.includes(p.id));
-  const noProviders = !loadingProviders && availableProviders.length === 0;
+  // Show all providers — disable click on unconfigured ones (clearer than hiding)
+  const availableProviders = ALL_PROVIDERS.map((p) => ({
+    ...p,
+    enabled: configured.includes(p.id),
+  }));
+  const anyConfigured = availableProviders.some((p) => p.enabled);
+  const noProviders = !loadingProviders && !anyConfigured;
 
   return (
     <div className="relative min-h-screen bg-black text-white vgrid overflow-hidden">
@@ -89,7 +94,7 @@ export function SignInClient() {
 
           <div className="space-y-4">
             <Feature icon={Shield} title="Workspace isolation" body="Each user gets a private workspace keyed to their OAuth identity. Sessions are JWT-signed and never shared." />
-            <Feature icon={Lock} title="Local-first ingestion" body="Your tokens live in encrypted env. Files indexed in your own embedding store. Nothing leaves unless you sync." />
+            <Feature icon={Lock} title="Consent-gated ingestion" body="Qyntra reads cloud sources only after OAuth approval, and local folders only after browser folder permission." />
             <Feature icon={Zap} title="Real-time sync" body="Connect a source once. Qyntra polls for updates every 5m. New file → new page → new prediction." />
           </div>
         </div>
@@ -129,43 +134,55 @@ export function SignInClient() {
           ) : (
             <>
               <div className="pixel text-[12px] text-[var(--ember)] mb-2">
-                {noProviders ? "SETUP REQUIRED" : mode === "signup" ? "STEP 01 · PICK YOUR IDENTITY" : "SIGN IN WITH"}
+                {mode === "signup" ? "CREATE WORKSPACE" : "SIGN IN"}
               </div>
-              <h2 className="pixel text-[28px] mb-1">{noProviders ? "OAuth not configured" : mode === "signup" ? "Pick a provider" : "Welcome back"}</h2>
+              <h2 className="pixel text-[28px] mb-1">
+                {mode === "signup" ? "Pick how to start" : "Welcome back"}
+              </h2>
               <p className="pixel text-[13px] text-[var(--text-2)] mb-6">
-                {noProviders
-                  ? "Add your OAuth credentials in Vercel Environment Variables to enable sign-in."
-                  : mode === "signup"
-                  ? "Your OAuth identity is your workspace key. Pick one — you can connect the rest later."
-                  : "Same provider you signed up with."}
+                Use OAuth for instant ingestion of that source. Or email + password and connect sources later.
               </p>
 
-              {noProviders && <SetupGuide configured={configured} />}
+              <div className="space-y-2">
+                {loadingProviders ? (
+                  <div className="text-[13px] text-[var(--muted)] py-4">Loading providers…</div>
+                ) : (
+                  availableProviders.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => p.enabled && handleSignIn(p.id)}
+                      disabled={!p.enabled}
+                      title={p.enabled ? `Continue with ${p.label}` : `${p.label} OAuth not configured. Use email + password below.`}
+                      className={`w-full p-4 rounded border transition flex items-center gap-3 text-left group ${
+                        p.enabled
+                          ? "border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] cursor-pointer"
+                          : "border-[var(--line)] opacity-50 cursor-not-allowed"
+                      }`}
+                    >
+                      <div className="size-10 rounded bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
+                        <ConnIcon kind={p.icon} size={22} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[14px] flex items-center gap-2">
+                          Continue with {p.label}
+                          {!p.enabled && (
+                            <span className="pixel text-[9px] px-1.5 py-0.5 rounded bg-[var(--muted)]/20 text-[var(--muted)]">
+                              SETUP
+                            </span>
+                          )}
+                        </div>
+                        <div className="pixel text-[11px] text-[var(--muted)]">{p.desc}</div>
+                      </div>
+                      <ArrowRight
+                        size={14}
+                        className={`text-[var(--muted)] ${p.enabled ? "group-hover:text-[var(--ember)]" : ""} transition`}
+                      />
+                    </button>
+                  ))
+                )}
+              </div>
 
-              {!noProviders && (
-                <div className="space-y-2">
-                  {loadingProviders ? (
-                    <div className="text-[13px] text-[var(--muted)] py-4">Loading providers…</div>
-                  ) : (
-                    availableProviders.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => handleSignIn(p.id)}
-                        className="w-full p-4 rounded border border-[var(--line)] hover:border-[var(--ember)]/50 hover:bg-[var(--bg-2)] transition flex items-center gap-3 text-left group"
-                      >
-                        <div className="size-10 rounded bg-[var(--bg-2)] flex items-center justify-center flex-shrink-0">
-                          <ConnIcon kind={p.icon} size={22} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[14px]">Continue with {p.label}</div>
-                          <div className="pixel text-[11px] text-[var(--muted)]">{p.desc}</div>
-                        </div>
-                        <ArrowRight size={14} className="text-[var(--muted)] group-hover:text-[var(--ember)] transition" />
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+              {!noProviders && <EmailSignupForm mode={mode} />}
 
               {!noProviders && (
                 <div className="mt-6 pt-6 border-t border-[var(--line)] flex flex-col gap-2">
@@ -175,14 +192,12 @@ export function SignInClient() {
                   >
                     {mode === "signup" ? "Already have a workspace? Sign in →" : "No workspace yet? Create one →"}
                   </Link>
-                  {mode !== "signup" && (
-                    <Link
-                      href="/forgot-password"
-                      className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
-                    >
-                      Can&apos;t sign in?
-                    </Link>
-                  )}
+                  <Link
+                    href="/forgot-password"
+                    className="pixel text-[12px] text-[var(--muted)] hover:text-[var(--ember)]"
+                  >
+                    Can&apos;t access your workspace? →
+                  </Link>
                 </div>
               )}
 
@@ -293,6 +308,134 @@ function SetupGuide({ configured }: { configured: string[] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface AuthResult {
+  ok?: boolean;
+  msg: string;
+  magicLink?: string;
+  emailed?: boolean;
+}
+
+function EmailSignupForm({ mode }: { mode: "signin" | "signup" }) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [accepted, setAccepted] = useState(mode === "signin");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<AuthResult | null>(null);
+  const isSignup = mode === "signup";
+
+  const valid = EMAIL_RE.test(email.trim()) && accepted;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid || busy) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const body = { email: email.trim(), name: name.trim() };
+      const res = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (res.ok && json.magicLink) {
+        setResult({ ok: true, msg: "Signing you in…", magicLink: json.magicLink, emailed: json.emailed });
+        window.location.href = json.magicLink;
+      } else if (res.ok) {
+        setResult({ ok: true, msg: json.message || "Done.", magicLink: json.magicLink });
+      } else {
+        setResult({ ok: false, msg: json.error || (isSignup ? "Sign-up failed." : "Sign-in failed.") });
+      }
+    } catch (err) {
+      setResult({ ok: false, msg: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 pt-6 border-t border-[var(--line)]">
+      <div className="pixel text-[12px] text-[var(--gold)] mb-2">
+        {isSignup ? "OR · CREATE ACCOUNT WITH EMAIL" : "OR · SIGN IN WITH EMAIL"}
+      </div>
+      <p className="pixel text-[11px] text-[var(--text-2)] mb-3 leading-relaxed">
+        Passwordless. Enter your email — we generate a magic sign-in link instantly. No OAuth required.
+      </p>
+      <form onSubmit={submit} className="space-y-2">
+        {isSignup && (
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name (optional)"
+            className="w-full px-3 py-2.5 rounded border border-[var(--line)] bg-[var(--bg-2)] text-[13px] outline-none focus:border-[var(--ember)]/50"
+            autoComplete="name"
+          />
+        )}
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full px-3 py-2.5 rounded border border-[var(--line)] bg-[var(--bg-2)] text-[13px] outline-none focus:border-[var(--ember)]/50"
+          autoComplete="email"
+        />
+        {isSignup && (
+          <label className="flex items-start gap-2 pixel text-[11px] text-[var(--text-2)] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5 accent-[var(--ember)]"
+            />
+            <span>
+              I agree to the{" "}
+              <Link href="/terms" className="text-[var(--ember)] hover:underline">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-[var(--ember)] hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
+        )}
+        <button
+          type="submit"
+          disabled={!valid || busy}
+          className="w-full px-4 py-2.5 rounded bg-[var(--ember)] text-white pixel text-[13px] hover:bg-[var(--ember-2)] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {busy ? "Working…" : isSignup ? "Create account & enter workspace" : "Email me a sign-in link"}
+          <ArrowRight size={13} />
+        </button>
+      </form>
+      {result && (
+        <div
+          className={`mt-3 p-3 rounded border text-[11.5px] pixel ${
+            result.ok
+              ? "border-[var(--good)]/40 bg-[var(--good)]/10 text-[var(--good)]"
+              : "border-[var(--bad)]/40 bg-[var(--bad)]/10 text-[var(--bad)]"
+          }`}
+        >
+          <div className="mb-2">{result.msg}</div>
+          {result.magicLink && (
+            <a
+              href={result.magicLink}
+              className="block w-full px-3 py-2.5 rounded bg-[var(--ember)] text-white pixel text-[12px] hover:bg-[var(--ember-2)] transition text-center"
+            >
+              {result.emailed ? "Open my workspace (sent to your inbox too)" : "Open my workspace →"}
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }

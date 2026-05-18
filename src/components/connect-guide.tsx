@@ -29,42 +29,26 @@ const GUIDES: Guide[] = [
     time: "~3 min",
     steps: [
       { text: "Go to Notion integration settings", url: "https://www.notion.so/my-integrations", urlLabel: "Open Notion integrations" },
-      { text: 'Click "New Integration" → Type: Public · Capabilities: Read content' },
+      { text: 'Click "New Integration", choose Public integration, and enable read content capability' },
       { text: "Copy Client ID and Client Secret" },
-      { text: 'Add Redirect URI: <your-domain>/api/auth/callback/notion' },
-      { text: "Paste Client ID + Secret into Vercel → Project → Settings → Environment Variables: NOTION_CLIENT_ID, NOTION_CLIENT_SECRET" },
-      { text: "Click OAUTH button below — done" },
+      { text: "Add Redirect URI: <your-domain>/api/auth/callback/notion" },
+      { text: "Add NOTION_CLIENT_ID, NOTION_CLIENT_SECRET, and NOTION_REDIRECT_URI in Vercel environment variables" },
+      { text: "Click OAUTH on the Notion source card" },
     ],
   },
   {
     id: "google",
-    name: "Google (Drive + Gmail)",
+    name: "Google Drive + Gmail",
     icon: "drive",
     difficulty: "medium",
     time: "~6 min",
     steps: [
       { text: "Open Google Cloud Console", url: "https://console.cloud.google.com", urlLabel: "Google Cloud Console" },
-      { text: "Create a project → APIs & Services → Enable APIs: Drive, Gmail" },
-      { text: "OAuth consent screen: External, fill app info" },
-      { text: "Credentials → Create OAuth 2.0 Client ID → Web application" },
+      { text: "Create a project and enable the Drive and Gmail APIs" },
+      { text: "Create an OAuth consent screen for external users" },
+      { text: "Create an OAuth 2.0 Client ID for a web application" },
       { text: "Authorized redirect URI: <your-domain>/api/auth/callback/google" },
-      { text: "Copy Client ID + Client Secret → paste in Vercel env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET" },
-      { text: "Sign in below — Drive + Gmail unlock together" },
-    ],
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    icon: "slack",
-    difficulty: "medium",
-    time: "~4 min",
-    steps: [
-      { text: "Open Slack API apps", url: "https://api.slack.com/apps", urlLabel: "Slack API apps" },
-      { text: "Create New App → From scratch → pick workspace" },
-      { text: "OAuth & Permissions → Add scopes: channels:read, channels:history, users:read" },
-      { text: "Add Redirect URL: <your-domain>/api/auth/callback/slack" },
-      { text: "Basic Information → App Credentials → copy Client ID + Client Secret" },
-      { text: "Paste in Vercel env: SLACK_CLIENT_ID, SLACK_CLIENT_SECRET" },
+      { text: "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel environment variables" },
     ],
   },
   {
@@ -75,24 +59,10 @@ const GUIDES: Guide[] = [
     time: "~2 min",
     steps: [
       { text: "Open GitHub developer settings", url: "https://github.com/settings/developers", urlLabel: "GitHub OAuth Apps" },
-      { text: "New OAuth App → Application name: Qyntra" },
-      { text: "Homepage URL: <your-domain> · Callback URL: <your-domain>/api/auth/callback/github" },
-      { text: "Generate client secret · copy Client ID + Secret" },
-      { text: "Paste in Vercel env: GITHUB_ID, GITHUB_SECRET" },
-    ],
-  },
-  {
-    id: "linkedin",
-    name: "LinkedIn",
-    icon: "linkedin",
-    difficulty: "medium",
-    time: "~5 min",
-    steps: [
-      { text: "Open LinkedIn Developers", url: "https://www.linkedin.com/developers/apps", urlLabel: "LinkedIn Apps" },
-      { text: "Create app → fill org info" },
-      { text: "Auth tab → Add redirect URL: <your-domain>/api/auth/callback/linkedin" },
-      { text: "Request scopes: r_liteprofile, r_emailaddress" },
-      { text: "Copy Client ID + Client Secret → paste in Vercel env: LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET" },
+      { text: "Create a new OAuth app named Qyntra" },
+      { text: "Homepage URL: <your-domain>" },
+      { text: "Callback URL: <your-domain>/api/auth/callback/github" },
+      { text: "Generate a client secret and add GITHUB_ID and GITHUB_SECRET in Vercel environment variables" },
     ],
   },
 ];
@@ -106,9 +76,9 @@ export function ConnectGuide() {
         <div className="pixel text-[12px] text-[var(--ember)] mb-1.5 flex items-center gap-2">
           <BookOpen size={12} /> How to connect
         </div>
-        <h2 className="pixel text-[24px]">Hook up each source in &lt; 5 minutes</h2>
+        <h2 className="pixel text-[24px]">Hook up each source in under 5 minutes</h2>
         <p className="pixel text-[13px] text-[var(--text-2)] mt-2">
-          Each provider needs an OAuth app registered once. Then click OAUTH on the source card to sign in. Tokens stored in Vercel env (encrypted).
+          Each provider needs an OAuth app registered once. Users still approve read access before Qyntra ingests anything.
         </p>
       </div>
 
@@ -132,11 +102,11 @@ export function ConnectGuide() {
                         g.difficulty === "easy" ? "text-[var(--good)]" :
                         g.difficulty === "medium" ? "text-[var(--gold)]" :
                         "text-[var(--ember)]"
-                      }>● </span>
+                      }>* </span>
                       {g.difficulty.toUpperCase()}
                     </span>
-                    <span>· {g.time}</span>
-                    <span>· {g.steps.length} steps</span>
+                    <span>- {g.time}</span>
+                    <span>- {g.steps.length} steps</span>
                   </div>
                 </div>
                 {isOpen ? <ChevronUp size={16} className="text-[var(--muted)]" /> : <ChevronDown size={16} className="text-[var(--muted)]" />}
