@@ -31,7 +31,10 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
-    return Response.json({ error: "Unauthenticated" }, { status: 401 });
+    // Anonymous visitors still hit POST when they toggle demo mode in the UI.
+    // Return 200 no-op so the console stays clean; their preference persists
+    // in localStorage via the client store. We only persist server-side when authed.
+    return Response.json({ ok: true, anonymous: true });
   }
   if (!hasSupabase()) {
     return Response.json({ ok: false, note: "Supabase not configured" });
