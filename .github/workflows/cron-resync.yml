@@ -1,0 +1,35 @@
+name: Cron · Re-sync every 5 minutes
+
+# Vercel Hobby limits crons to once-per-day. We keep the daily Vercel cron as a
+# safety net and run the real 5-minute heartbeat from GitHub Actions instead.
+#
+# Required repository secrets:
+#   QYNTRA_BASE_URL  — https://qyntra-app.vercel.app
+#   CRON_SECRET      — same value as Vercel env CRON_SECRET
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call /api/cron/resync
+        run: |
+          set -euo pipefail
+          BASE="${{ secrets.QYNTRA_BASE_URL }}"
+          if [ -z "$BASE" ]; then
+            echo "::error::QYNTRA_BASE_URL not set"
+            exit 1
+          fi
+          curl -fsS -X GET "$BASE/api/cron/resync" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: qyntra-gh-cron/1.0" \
+            --max-time 90 \
+            -w "\nHTTP %{http_code}\n"
