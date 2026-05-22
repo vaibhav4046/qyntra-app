@@ -1,0 +1,22 @@
+{
+  "name": "Qyntra — Personal Knowledge OS",
+  "short_name": "Qyntra",
+  "description": "Your own private Wikipedia, compiled from your files, notes and conversations. Cited answers. 3D galaxy view.",
+  "start_url": "/home",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#ff5b1f",
+  "orientation": "any",
+  "categories": ["productivity", "education", "utilities"],
+  "icons": [
+    { "src": "/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/apple-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Generate article", "short_name": "Generate", "url": "/wiki/generate", "icons": [{ "src": "/icon.png", "sizes": "192x192" }] },
+    { "name": "Chat", "short_name": "Chat", "url": "/ask", "icons": [{ "src": "/icon.png", "sizes": "192x192" }] },
+    { "name": "3D Galaxy", "short_name": "Galaxy", "url": "/map-3d", "icons": [{ "src": "/icon.png", "sizes": "192x192" }] }
+  ]
+}

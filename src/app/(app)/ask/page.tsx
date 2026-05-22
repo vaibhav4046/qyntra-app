@@ -17,9 +17,16 @@ import {
   MessageSquare,
   BrainCircuit,
   AlertCircle,
+  Mic,
+  MicOff,
+  Image as ImageIcon,
+  Slash,
 } from "lucide-react";
 import { useProfileStore } from "@/lib/profile-store";
 import { useChatStore } from "@/lib/chat-store";
+import { createVoice, hasVoiceSupport, type VoiceController } from "@/lib/voice";
+import { SLASH_COMMANDS, matchCommands, tryConsumeSlash } from "@/lib/slash-commands";
+import { trackError } from "@/lib/track";
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
@@ -43,8 +50,14 @@ export default function AskPage() {
   const [tokenInfo, setTokenInfo] = useState<{ input: number; output: number } | null>(null);
   const [corpusInfo, setCorpusInfo] = useState<{ files: number; chars: number } | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [voiceState, setVoiceState] = useState<"idle" | "listening" | "error">("idle");
+  const [ocrLoading, setOcrLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isFollowingRef = useRef(true);
+  const voiceRef = useRef<VoiceController | null>(null);
+  const voiceSupport = hasVoiceSupport();
+  const slashMatches = useMemo(() => matchCommands(input), [input]);
+  const showSlashMenu = slashMatches.length > 0 && input.startsWith("/") && !input.includes("\n") && !streaming;
   const { demoMode, init: initProfile } = useProfileStore();
   const {
     conversations,
@@ -168,12 +181,110 @@ export default function AskPage() {
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }
 
+  function toggleVoice() {
+    if (!voiceSupport) {
+      setChatError("Voice input not supported in this browser. Try Chrome.");
+      return;
+    }
+    if (voiceState === "listening") {
+      voiceRef.current?.stop();
+      return;
+    }
+    const ctrl = createVoice({
+      lang: typeof navigator !== "undefined" && navigator.language?.startsWith("hi") ? "hi-IN" : "en-US",
+      onTranscript: (text, isFinal) => {
+        if (isFinal) {
+          setInput((prev) => (prev ? prev.trim() + " " : "") + text);
+        } else {
+          // Show interim by replacing the trailing interim segment marker
+          setInput((prev) => {
+            const base = prev.replace(/\s*…[^…]*$/u, "");
+            return base + (base ? " " : "") + "…" + text;
+          });
+        }
+      },
+      onStateChange: (s) => {
+        setVoiceState(s);
+        if (s === "idle") {
+          // Strip lingering interim marker on stop
+          setInput((prev) => prev.replace(/\s*…[^…]*$/u, "").trim());
+        }
+      },
+      onError: (e) => {
+        setChatError(`Voice error: ${e}`);
+        setVoiceState("idle");
+      },
+    });
+    if (!ctrl) {
+      setChatError("Voice init failed.");
+      return;
+    }
+    voiceRef.current = ctrl;
+    ctrl.start();
+  }
+
+  // Clean up voice on unmount
+  useEffect(() => {
+    return () => voiceRef.current?.destroy();
+  }, []);
+
+  async function onComposerPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) await uploadImageForOCR(file);
+        return;
+      }
+    }
+  }
+
+  async function uploadImageForOCR(file: File) {
+    if (ocrLoading) return;
+    setOcrLoading(true);
+    setChatError(null);
+    try {
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.onerror = () => rej(r.error);
+        r.readAsDataURL(file);
+      });
+      const apiKey = typeof window !== "undefined" ? localStorage.getItem("qyntra:apiKey") || "" : "";
+      const r = await fetch("/api/ocr", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(apiKey ? { "x-qyntra-api-key": apiKey } : {}),
+        },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) throw new Error(data?.error || "OCR failed");
+      const extracted = (data.text || "").trim();
+      setInput((prev) => {
+        const join = prev.trim() ? prev.trim() + "\n\n" : "";
+        return join + `[Image OCR]\n${extracted}\n\n`;
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      setChatError(`Image OCR: ${msg}`);
+      trackError(err, "ask/ocr");
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
   async function send() {
     if (!input.trim() || streaming) return;
     setChatError(null);
     isFollowingRef.current = true; // Reset follow lock when user sends a message
     setShowScrollDown(false);
-    const userText = input;
+    // Apply slash-command transform if the input starts with /<cmd>.
+    const parsed = tryConsumeSlash(input);
+    const userText = parsed.command ? parsed.command.buildPrompt(parsed.arg) : input;
     setInput("");
     if (!activeId) newChat();
     pushMessage({ role: "user", content: userText });
@@ -445,12 +556,51 @@ export default function AskPage() {
                 <AlertCircle size={11} /> {chatError}
               </div>
             )}
-            <div className="rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] focus-within:border-[var(--ember)]/40 transition">
+            <div className="relative rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] focus-within:border-[var(--ember)]/40 transition">
+              {showSlashMenu && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] shadow-xl overflow-hidden z-10">
+                  <div className="mono cap text-[9px] text-[var(--muted)] px-4 py-2 border-b border-[var(--line)] flex items-center gap-1.5">
+                    <Slash size={10} /> Slash commands · {slashMatches.length} of {SLASH_COMMANDS.length}
+                  </div>
+                  <div className="max-h-[260px] overflow-y-auto">
+                    {slashMatches.map((c) => (
+                      <button
+                        key={c.cmd}
+                        type="button"
+                        onClick={() => {
+                          setInput(c.cmd + " ");
+                          const ta = document.querySelector<HTMLTextAreaElement>("textarea");
+                          ta?.focus();
+                        }}
+                        className="w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-[var(--bg-2)] transition"
+                      >
+                        <span className="mono text-[12px] text-[var(--ember)] w-24">{c.cmd}</span>
+                        <span className="flex-1">
+                          <span className="block text-[13px] text-[var(--text)]">{c.label}</span>
+                          <span className="block text-[11px] text-[var(--muted)]">{c.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {voiceState === "listening" && (
+                <div className="absolute -top-3 left-4 mono cap text-[9px] px-2 py-0.5 rounded-full bg-[var(--ember)]/20 text-[var(--ember)] border border-[var(--ember)]/40 flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full bg-[var(--ember)] animate-pulse" />
+                  Listening…
+                </div>
+              )}
+              {ocrLoading && (
+                <div className="absolute -top-3 right-4 mono cap text-[9px] px-2 py-0.5 rounded-full bg-[var(--gold)]/20 text-[var(--gold)] border border-[var(--gold)]/40 flex items-center gap-1.5">
+                  <Loader2 size={9} className="animate-spin" /> Reading image…
+                </div>
+              )}
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-                placeholder="Ask anything across your wiki…"
+                onPaste={onComposerPaste}
+                placeholder="Ask anything across your wiki…  ·  Type / for commands  ·  Paste an image to OCR  ·  Tap mic to dictate"
                 rows={2}
                 className="w-full bg-transparent outline-none text-[15px] px-4 sm:px-5 py-3 sm:py-4 resize-none"
                 disabled={streaming}
@@ -486,14 +636,46 @@ export default function AskPage() {
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={send}
-                  disabled={!input.trim() || streaming}
-                  className="shimmer mono cap text-[11px] font-semibold px-4 py-2 rounded text-white flex items-center gap-2 disabled:opacity-40 glow-ember"
-                >
-                  {streaming ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  ASK
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <label
+                    title="Attach image — extracted via Groq vision OCR"
+                    className="mono cap text-[10px] px-2 py-1.5 rounded text-[var(--muted)] border border-transparent hover:text-[var(--ember)] hover:border-[var(--ember)]/30 cursor-pointer transition flex items-center gap-1"
+                  >
+                    <ImageIcon size={12} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={streaming || ocrLoading}
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (f) await uploadImageForOCR(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    disabled={streaming || !voiceSupport}
+                    title={voiceSupport ? (voiceState === "listening" ? "Stop listening" : "Voice input") : "Not supported in this browser"}
+                    className={`mono cap text-[10px] px-2 py-1.5 rounded border transition flex items-center gap-1 ${
+                      voiceState === "listening"
+                        ? "text-[var(--ember)] border-[var(--ember)]/40 bg-[var(--ember)]/10"
+                        : "text-[var(--muted)] border-transparent hover:text-[var(--ember)] hover:border-[var(--ember)]/30"
+                    } disabled:opacity-30`}
+                  >
+                    {voiceState === "listening" ? <MicOff size={12} /> : <Mic size={12} />}
+                  </button>
+                  <button
+                    onClick={send}
+                    disabled={!input.trim() || streaming}
+                    className="shimmer mono cap text-[11px] font-semibold px-4 py-2 rounded text-white flex items-center gap-2 disabled:opacity-40 glow-ember"
+                  >
+                    {streaming ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    ASK
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -283,9 +283,33 @@ qyntra-app/
 
 ## Demo Flow (90 seconds)
 
-1. **Sign in** — Email magic link (no passwords, no OAuth setup)
-2. **Connect** — Pick a desktop folder, or OAuth with Google/GitHub/Notion
-3. **Explore** — Files → Ask → Read → Galaxy. All your knowledge, alive.
+1. **No signup** — Open `/demo` and you're in. Pre-seeded corpus, banner walks you to every surface.
+2. **Generate a Wikipedia page** — `/wiki/generate?topic=GraphRAG`. Cited inline, infobox, sticky TOC, print/PDF, see-also chips.
+3. **Spin the galaxy** — `/map-3d`. Drag to rotate the constellation, click any node to read the source.
+4. **Chat with voice + slash + image OCR** — `/ask`. Tap mic. Type `/`. Paste any screenshot. Every answer cites the file.
+5. **Sign in for real** — Email magic link or OAuth Google/GitHub/Notion. Auto-resyncs every 5 minutes.
+
+## What ships v2 (May 2026 push)
+
+- **Killer feature: /wiki article auto-generator** — Groq Llama 3.3 70B JSON output → infobox, sections, references, see-also.
+- **Stability:** error boundaries on every surface, lightweight Sentry tracker, Google OAuth refresh-token healing inside NextAuth JWT + cron.
+- **Voice + slash + OCR** — Web Speech API, 5 slash commands, Groq Llama 3.2 11B vision for paste-image OCR.
+- **PWA** — manifest + service worker (offline shell + cache-first static + stale-while-revalidate for wiki shells), install prompt component.
+- **OG cards** — `/` and `/wiki/generate` get Edge-rendered Wikithon-branded social cards.
+- **Real legal + pricing** — `/privacy`, `/terms`, `/pricing` with three-tier plan and BYO API key explainer.
+- **Onboarding tour** — five-step overlay on first visit explaining Generate / Galaxy / Ask / Wiki / Sources.
+- **Cron:** Vercel daily safety-net + GitHub Actions workflow every 5 min calling `/api/cron/resync` with `CRON_SECRET`.
+
+## Wikithon ’26 Submission Packet
+
+| Item | Where |
+|---|---|
+| Live site | https://qyntra-app.vercel.app |
+| No-signup demo | https://qyntra-app.vercel.app/demo |
+| Killer feature | https://qyntra-app.vercel.app/wiki/generate |
+| Source | https://github.com/vaibhav4046/qyntra-app |
+| Pricing | https://qyntra-app.vercel.app/pricing |
+| Privacy / Terms | https://qyntra-app.vercel.app/privacy · /terms |
 
 ---
 

@@ -11,6 +11,7 @@ import { Logo } from "./logo";
 import { SearchPopover } from "./search-popover";
 import { AvatarMenu } from "./avatar-menu";
 import { DemoBanner } from "./demo-banner";
+import { OnboardingTour } from "./onboarding-tour";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState, useCallback } from "react";
 
@@ -112,6 +113,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Demo banner — only visible when in demo mode */}
       <DemoBanner />
+      <OnboardingTour />
 
       {/* Mobile search overlay */}
       <AnimatePresence>
