@@ -45,20 +45,20 @@ export async function markConnectorSynced(
   userId: string,
   provider: string,
   itemCount: number,
-  accessToken?: string
+  accessToken?: string,
+  refreshToken?: string
 ) {
   const sb = supabaseAdmin();
-  await sb.from("connectors").upsert(
-    {
-      user_id: userId,
-      provider,
-      is_on: true,
-      item_count: itemCount,
-      last_sync: new Date().toISOString(),
-      access_token: accessToken || null,
-    },
-    { onConflict: "user_id,provider" }
-  );
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    provider,
+    is_on: true,
+    item_count: itemCount,
+    last_sync: new Date().toISOString(),
+  };
+  if (accessToken !== undefined) row.access_token = accessToken || null;
+  if (refreshToken !== undefined) row.refresh_token = refreshToken || null;
+  await sb.from("connectors").upsert(row, { onConflict: "user_id,provider" });
 }
 
 interface NotionPageProps {

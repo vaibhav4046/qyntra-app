@@ -70,7 +70,7 @@ export function Graph2D({ nodes, edges }: Props) {
         const clusterCy = cy + Math.sin(angle) * mainR;
         const group = byType[type];
         const clusterR = Math.max(40, Math.min(W, H) * 0.13);
-        clusterCentres.set(type, { cx: clusterCx, cy: clusterCy, r: clusterR + 30, color: TYPE_COLOR[type] });
+        clusterCentres.set(type, { cx: clusterCx, cy: clusterCy, r: clusterR + 30, color: TYPE_COLOR[type as keyof typeof TYPE_COLOR] });
         group.forEach((node, gi) => {
           // Phyllotaxis within cluster — clean spacing
           const r = clusterR * Math.sqrt(gi / Math.max(1, group.length - 1));

@@ -3,7 +3,18 @@
   "crons": [
     {
       "path": "/api/cron/resync",
-      "schedule": "0 6 * * *"
+      "schedule": "*/5 * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/cron/resync/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/ingest/[provider]/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

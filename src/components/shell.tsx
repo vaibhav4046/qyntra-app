@@ -6,19 +6,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ConnIcon } from "./conn-icon";
 import { useConnectorStore } from "@/lib/connector-store";
 import type { QConnector } from "@/lib/data";
-import { Home, MessageSquare, BookOpen, FileText, Plug, Search, Boxes, Menu, X } from "lucide-react";
+import { Home, MessageSquare, BookOpen, FileText, Plug, Search, Boxes, Menu, X, Sparkles } from "lucide-react";
 import { Logo } from "./logo";
 import { SearchPopover } from "./search-popover";
 import { AvatarMenu } from "./avatar-menu";
+import { DemoBanner } from "./demo-banner";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState, useCallback } from "react";
 
 const ROUTES = [
   { href: "/home", label: "Dashboard", icon: Home, k: "1" },
   { href: "/wiki", label: "Wiki", icon: BookOpen, k: "2" },
-  { href: "/map-3d", label: "3D Galaxy", icon: Boxes, k: "3", badge: "BETA" },
-  { href: "/ask", label: "Chat", icon: MessageSquare, k: "4" },
-  { href: "/read", label: "Read", icon: BookOpen, k: "5" },
+  { href: "/wiki/generate", label: "Generate", icon: Sparkles, k: "3", badge: "NEW" },
+  { href: "/map-3d", label: "3D Galaxy", icon: Boxes, k: "4", badge: "BETA" },
+  { href: "/ask", label: "Chat", icon: MessageSquare, k: "5" },
   { href: "/files", label: "Files", icon: FileText, k: "6" },
   { href: "/sources", label: "Sources", icon: Plug, k: "7" },
 ];
@@ -43,7 +44,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [searchQuery, router]);
 
   return (
-    <div className="relative h-[100dvh] grid grid-rows-[56px_1fr] overflow-hidden text-[var(--text)]">
+    <div className="relative h-[100dvh] grid grid-rows-[56px_auto_1fr] overflow-hidden text-[var(--text)]">
       {/* Topbar */}
       <header className="flex items-center justify-between gap-2 px-3 sm:px-5 border-b border-[var(--line)] bg-[var(--bg)]/80 backdrop-blur-md z-20">
         <div className="flex items-center gap-2 sm:gap-5 min-w-0">
@@ -108,6 +109,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </header>
+
+      {/* Demo banner — only visible when in demo mode */}
+      <DemoBanner />
 
       {/* Mobile search overlay */}
       <AnimatePresence>

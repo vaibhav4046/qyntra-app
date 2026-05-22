@@ -5,6 +5,7 @@ import Notion from "next-auth/providers/notion";
 import Credentials from "next-auth/providers/credentials";
 import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 import { verifyMagicToken } from "@/lib/magic-link";
+import { refreshGoogleToken } from "@/lib/token-refresh";
 
 declare module "next-auth" {
   interface Session {
@@ -12,6 +13,7 @@ declare module "next-auth" {
     refreshToken?: string;
     provider?: string;
     expiresAt?: number;
+    tokenError?: string;
     user: DefaultSession["user"] & { id?: string };
   }
 }
@@ -144,6 +146,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.email = user.email;
       }
+      // Refresh Google access token when expired (60s skew). Only for google provider
+      // with a stored refresh_token. Failure flags `tokenError` so the UI can prompt re-auth.
+      const now = Math.floor(Date.now() / 1000);
+      const exp = typeof token.expiresAt === "number" ? token.expiresAt : 0;
+      const isGoogle = token.provider === "google";
+      const hasRefresh = typeof token.refreshToken === "string" && token.refreshToken.length > 0;
+      if (isGoogle && hasRefresh && exp && exp - 60 < now) {
+        const fresh = await refreshGoogleToken(token.refreshToken as string);
+        if (fresh?.access_token) {
+          token.accessToken = fresh.access_token;
+          token.expiresAt = Math.floor(Date.now() / 1000) + (fresh.expires_in ?? 3600);
+          token.refreshToken = fresh.refresh_token || token.refreshToken;
+          delete (token as Record<string, unknown>).tokenError;
+        } else {
+          (token as Record<string, unknown>).tokenError = "RefreshAccessTokenError";
+        }
+      }
       return token;
     },
     async session({ session, token }) {
@@ -151,6 +170,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.refreshToken = token.refreshToken as string;
       session.provider = token.provider as string;
       session.expiresAt = token.expiresAt as number | undefined;
+      session.tokenError = (token as Record<string, unknown>).tokenError as string | undefined;
       (session.user as { id?: string }).id = token.uid as string | undefined;
       return session;
     },

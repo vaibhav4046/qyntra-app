@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import {
   Sparkles,
   Shuffle,
-  Search,
   BookOpen,
   Hash,
   Lightbulb,
@@ -92,15 +91,15 @@ export default function WikiHomePage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (q.trim()) window.location.href = `/ask?q=${encodeURIComponent(q.trim())}`;
+            if (q.trim()) window.location.href = `/wiki/generate?topic=${encodeURIComponent(q.trim())}`;
           }}
           className="mt-6 max-w-[680px] mx-auto flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--line-2)] bg-[var(--bg-1)] focus-within:border-[var(--ember)]/50 transition"
         >
-          <Search size={16} className="text-[var(--muted)]" />
+          <Sparkles size={16} className="text-[var(--ember)]" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search your wiki — entities, claims, files, anything…"
+            placeholder="Write me a Wikipedia page on… (or Random / Ask)"
             className="flex-1 bg-transparent outline-none text-[14px]"
           />
           <button
@@ -113,11 +112,14 @@ export default function WikiHomePage() {
           </button>
           <button
             type="submit"
-            className="mono cap text-[10px] px-3 py-1.5 rounded bg-[var(--ember)] text-white"
+            className="mono cap text-[10px] px-3 py-1.5 rounded bg-[var(--ember)] text-white inline-flex items-center gap-1.5"
           >
-            ASK →
+            <Sparkles size={11} /> GENERATE →
           </button>
         </form>
+        <div className="mt-2 text-[11px] text-[var(--muted)]">
+          New: <Link href="/ask" className="underline hover:text-[var(--ember)]">Ask</Link> · <Link href="/wiki/generate" className="underline hover:text-[var(--ember)]">/wiki article auto-generator</Link>
+        </div>
       </div>
 
       {/* Two-column grid */}
