@@ -116,9 +116,11 @@ export function ChatBubble() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setOpen(true)}
+        aria-label="Open Qyntra chat"
+        title="Open Qyntra chat"
         className="fixed bottom-6 right-6 z-40 size-14 rounded-full shimmer flex items-center justify-center text-white glow-ember shadow-2xl"
       >
-        <MessageSquare size={22} />
+        <MessageSquare size={22} aria-hidden="true" />
       </motion.button>
 
       <AnimatePresence>

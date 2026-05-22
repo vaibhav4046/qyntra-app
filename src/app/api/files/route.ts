@@ -4,7 +4,9 @@ import { supabaseAdmin, hasSupabase, ensureProfile } from "@/lib/supabase";
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
-    return Response.json({ files: [], error: "Unauthenticated" }, { status: 401 });
+    // Demo / anonymous: return empty file list with 200 so the dashboard can
+    // gracefully fall back to seeded data without console-level 401 errors.
+    return Response.json({ files: [], anonymous: true });
   }
   if (!hasSupabase()) {
     return Response.json({ files: [] });

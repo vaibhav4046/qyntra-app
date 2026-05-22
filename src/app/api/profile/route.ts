@@ -4,7 +4,10 @@ import { supabaseAdmin, hasSupabase } from "@/lib/supabase";
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
-    return Response.json({ error: "Unauthenticated" }, { status: 401 });
+    // Treat anonymous as a 200 with an empty profile so the demo workspace
+    // doesn't log noisy 401s in the console (Lighthouse best-practices flagged
+    // these as page errors).
+    return Response.json({ profile: null, demoMode: true, onboarded: false, anonymous: true });
   }
   if (!hasSupabase()) {
     return Response.json({ profile: null, demoMode: false, onboarded: false });

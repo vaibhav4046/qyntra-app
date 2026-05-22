@@ -7,7 +7,6 @@
   --bg-3: #1a1d22;
   --text: #f4f4f5;
   --text-2: #b8bcc4;
-  --muted: #71757e;
   --line: rgba(255, 255, 255, 0.06);
   --line-2: rgba(255, 255, 255, 0.12);
   --ember: #ff5b1f;
@@ -18,6 +17,10 @@
   --good: #2dd4bf;
   --warn: #fbbf24;
   --bad: #ef4444;
+  /* Lighten muted to clear WCAG AA 4.5:1 on the near-black background. */
+  --muted: #8b8f96;
+  /* Slightly darken ember when used as a background for white labels so contrast clears AA. */
+  --ember-on-text: #d24a14;
   --display: var(--font-qyntra-sans), "Space Grotesk", system-ui, -apple-system, sans-serif;
   --pixel: var(--font-qyntra-pixel), var(--font-qyntra-vt), "Pixelify Sans", "VT323", "Press Start 2P", ui-monospace, monospace;
   --mono: var(--font-qyntra-mono), "JetBrains Mono", ui-monospace, "SF Mono", monospace;
