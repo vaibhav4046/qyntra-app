@@ -1,7 +1,30 @@
 import type { Metadata, Viewport } from "next";
+import { Space_Grotesk, JetBrains_Mono, Pixelify_Sans, VT323 } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { PWARegister } from "@/components/pwa-register";
+
+// Self-host Google Fonts via next/font so they don't block first paint and
+// LCP doesn't wait on a third-party stylesheet round-trip.
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-qyntra-sans",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-qyntra-mono",
+  display: "swap",
+});
+const pixelifySans = Pixelify_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-qyntra-pixel",
+  display: "swap",
+});
+const vt323 = VT323({ subsets: ["latin"], weight: ["400"], variable: "--font-qyntra-vt", display: "swap" });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://qyntra-app.vercel.app";
 
@@ -47,15 +70,10 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const fontVars = `${spaceGrotesk.variable} ${jetbrainsMono.variable} ${pixelifySans.variable} ${vt323.variable}`;
   return (
-    <html lang="en">
+    <html lang="en" className={fontVars}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&family=VT323&display=swap"
-          rel="stylesheet"
-        />
         <script
           dangerouslySetInnerHTML={{
             __html: `try{document.documentElement.setAttribute('data-theme','dark');localStorage.setItem('qyntra:theme','dark');}catch(e){}`,

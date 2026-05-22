@@ -18,9 +18,9 @@
   --good: #2dd4bf;
   --warn: #fbbf24;
   --bad: #ef4444;
-  --display: "Space Grotesk", system-ui, -apple-system, sans-serif;
-  --pixel: "Pixelify Sans", "VT323", "Press Start 2P", ui-monospace, monospace;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --display: var(--font-qyntra-sans), "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --pixel: var(--font-qyntra-pixel), var(--font-qyntra-vt), "Pixelify Sans", "VT323", "Press Start 2P", ui-monospace, monospace;
+  --mono: var(--font-qyntra-mono), "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 }
 
 /* Light mode removed — dark is the only canonical theme. */
